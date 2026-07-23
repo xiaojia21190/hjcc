@@ -101,48 +101,74 @@ if (data.etfs.some((etf) => !etf.isLargest)) errors.push('selected ETF is not ma
 type ExternalKlineResponse = { data?: { klines?: string[] } | null }
 async function externalBars(secid: string) {
   const url = `https://push2his.eastmoney.com/api/qt/stock/kline/get?secid=${secid}&klt=101&fqt=1&beg=20150101&end=20500101&lmt=5000&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58`
-  const json = await fetch(url).then((response) => response.json()) as ExternalKlineResponse
-  return (json.data?.klines ?? []).map((line) => {
-    const [date, , close, , , , amount] = line.split(',')
-    return { date, close: Number(close), amount: Number(amount) }
-  })
-}
-const [externalPrice, externalSh, externalSz] = await Promise.all([
-  externalBars('1.000985'),
-  externalBars('1.000001'),
-  externalBars('0.399001'),
-])
-const externalShByDate = new Map(externalSh.map((point) => [point.date, point.amount]))
-const externalSzByDate = new Map(externalSz.map((point) => [point.date, point.amount]))
-const alignedExternal = externalPrice
-  .map((point) => {
-    const sh = externalShByDate.get(point.date)
-    const sz = externalSzByDate.get(point.date)
-    return sh != null && sz != null ? { ...point, amount: sh + sz } : null
-  })
-  .filter((point): point is NonNullable<typeof point> => point != null)
-let smoothAmount = 0
-const externalCalculated: Array<{ date: string; activeCapYi: number; marketIndex: number; marketAmountYi: number }> = []
-for (let index = 0; index < alignedExternal.length; index++) {
-  const point = alignedExternal[index]
-  smoothAmount = index === 0 ? point.amount : (point.amount + 9 * smoothAmount) / 10
-  if (index < 5) continue
-  const priorFiveClose = alignedExternal.slice(index - 5, index).reduce((sum, item) => sum + item.close, 0) / 5
-  externalCalculated.push({
-    date: point.date,
-    activeCapYi: Number(((smoothAmount * point.close) / priorFiveClose / 1e8).toFixed(2)),
-    marketIndex: Number(point.close.toFixed(2)),
-    marketAmountYi: Number((point.amount / 1e8).toFixed(2)),
-  })
-}
-if (externalCalculated.length !== market.length) errors.push('external market history length mismatch')
-for (let index = 0; index < Math.min(externalCalculated.length, market.length); index++) {
-  const external = externalCalculated[index]
-  const cached = market[index]
-  if (external.date !== cached.date || external.activeCapYi !== cached.activeCapYi || external.marketIndex !== cached.marketIndex || external.marketAmountYi !== cached.marketAmountYi) {
-    errors.push(`${cached.date}: market history differs from external source/formula`)
-    break
+  let lastError: unknown
+  for (let attempt = 1; attempt <= 4; attempt++) {
+    try {
+      const response = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; huijin-etf-monitor audit)',
+          Referer: 'https://quote.eastmoney.com/',
+          Accept: 'application/json,*/*',
+        },
+        signal: AbortSignal.timeout(20_000),
+      })
+      if (!response.ok) throw new Error(`HTTP ${response.status}`)
+      const json = await response.json() as ExternalKlineResponse
+      const klines = json.data?.klines ?? []
+      if (!klines.length) throw new Error('empty kline response')
+      return klines.map((line) => {
+        const [date, , close, , , , amount] = line.split(',')
+        return { date, close: Number(close), amount: Number(amount) }
+      })
+    } catch (error) {
+      lastError = error
+      if (attempt < 4) await new Promise((resolve) => setTimeout(resolve, attempt * 800))
+    }
   }
+  throw lastError instanceof Error ? lastError : new Error(String(lastError))
+}
+
+try {
+  const [externalPrice, externalSh, externalSz] = await Promise.all([
+    externalBars('1.000985'),
+    externalBars('1.000001'),
+    externalBars('0.399001'),
+  ])
+  const externalShByDate = new Map(externalSh.map((point) => [point.date, point.amount]))
+  const externalSzByDate = new Map(externalSz.map((point) => [point.date, point.amount]))
+  const alignedExternal = externalPrice
+    .map((point) => {
+      const sh = externalShByDate.get(point.date)
+      const sz = externalSzByDate.get(point.date)
+      return sh != null && sz != null ? { ...point, amount: sh + sz } : null
+    })
+    .filter((point): point is NonNullable<typeof point> => point != null)
+  let smoothAmount = 0
+  const externalCalculated: Array<{ date: string; activeCapYi: number; marketIndex: number; marketAmountYi: number }> = []
+  for (let index = 0; index < alignedExternal.length; index++) {
+    const point = alignedExternal[index]
+    smoothAmount = index === 0 ? point.amount : (point.amount + 9 * smoothAmount) / 10
+    if (index < 5) continue
+    const priorFiveClose = alignedExternal.slice(index - 5, index).reduce((sum, item) => sum + item.close, 0) / 5
+    externalCalculated.push({
+      date: point.date,
+      activeCapYi: Number(((smoothAmount * point.close) / priorFiveClose / 1e8).toFixed(2)),
+      marketIndex: Number(point.close.toFixed(2)),
+      marketAmountYi: Number((point.amount / 1e8).toFixed(2)),
+    })
+  }
+  if (externalCalculated.length !== market.length) errors.push('external market history length mismatch')
+  for (let index = 0; index < Math.min(externalCalculated.length, market.length); index++) {
+    const external = externalCalculated[index]
+    const cached = market[index]
+    if (external.date !== cached.date || external.activeCapYi !== cached.activeCapYi || external.marketIndex !== cached.marketIndex || external.marketAmountYi !== cached.marketAmountYi) {
+      errors.push(`${cached.date}: market history differs from external source/formula`)
+      break
+    }
+  }
+} catch (error) {
+  const message = error instanceof Error ? error.message : String(error)
+  warnings.push(`external market cross-check skipped: ${message}`)
 }
 
 console.log(JSON.stringify({
