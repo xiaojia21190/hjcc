@@ -14,6 +14,13 @@ const latestScale = computed(() => {
   const history = props.etf?.scaleHistory ?? [];
   return history[history.length - 1] ?? null;
 });
+const latestAnchored = computed(() => {
+  const pts =
+    props.etf?.huijinEstimateHistory.filter(
+      (p) => p.estimateMethod === "anchored",
+    ) ?? [];
+  return pts.length > 0 ? pts[pts.length - 1] : null;
+});
 
 const pieOption = computed<EChartsCoreOption>(() => {
   const holders = latestReport.value?.holders ?? [];
@@ -125,13 +132,27 @@ const pieOption = computed<EChartsCoreOption>(() => {
         </div>
         <div class="kpi">
           <div class="k">汇金当前持仓</div>
-          <div class="v mono">待新披露</div>
+          <div class="v mono">
+            <template v-if="latestAnchored">
+              ≈ {{ formatYi(latestAnchored.huijinValueYi) }}
+              <span v-if="latestAnchored.clampTriggered" class="estimate-tag warn">⚠ clamp</span>
+            </template>
+            <template v-else>待新披露</template>
+          </div>
         </div>
         <div class="kpi">
           <div class="k">汇金当前占比</div>
-          <div class="v mono huijin">待新披露</div>
+          <div class="v mono huijin">
+            {{ latestAnchored ? formatPct(latestAnchored.huijinPct) : "待新披露" }}
+          </div>
         </div>
-        <div class="estimate-note">ETF 总份额变化不能识别持有人，非报告期不推算汇金份额、占比或市值</div>
+        <div class="estimate-note">
+          {{
+            latestAnchored
+              ? `份额锚定估算（${latestAnchored.date}）：假设汇金不主动赎回，估算份额 = min(披露份额, 当日总份额)${latestAnchored.clampTriggered ? "；总份额已低于披露汇金份额，估算取总份额上限，可靠性下降" : ""}`
+              : "ETF 总份额变化不能识别持有人，无汇金披露锚点时不推算持仓"
+          }}
+        </div>
       </div>
     </section>
 

@@ -25,6 +25,20 @@ const cards = computed(() => {
     (sum, point) => sum + point.shares,
     0,
   )
+  const latestAnchored = props.etfs
+    .map((etf) => {
+      const pts = etf.huijinEstimateHistory.filter(
+        (p) => p.estimateMethod === 'anchored',
+      )
+      return pts.length > 0 ? pts[pts.length - 1] : null
+    })
+    .filter((p): p is NonNullable<typeof p> => p != null)
+  const estTotalYi = latestAnchored.reduce(
+    (sum, p) => sum + (p.huijinValueYi ?? 0),
+    0,
+  )
+  const estDate = latestAnchored.length > 0 ? latestAnchored[0].date : null
+  const clampedCount = latestAnchored.filter((p) => p.clampTriggered).length
   return [
     {
       label: '汇金最近披露合计估值',
@@ -33,6 +47,14 @@ const cards = computed(() => {
         ? `最近报告期 ${props.latestReport} · 已披露 ${disclosures.length}/${props.etfs.length} 只`
         : '暂无汇金持仓披露',
       accent: 'gold',
+    },
+    {
+      label: '汇金估算合计持仓',
+      value: latestAnchored.length > 0 ? formatYi(estTotalYi) : '—',
+      sub: estDate
+        ? `估算日 ${estDate} · 份额锚定法${clampedCount > 0 ? ` · ${clampedCount} 只触发 clamp ⚠` : ''}`
+        : '无估算锚点',
+      accent: 'orange',
     },
     {
       label: '0AMV 活筹估算',

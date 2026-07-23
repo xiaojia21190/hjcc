@@ -990,35 +990,85 @@ function buildHuijinEstimate(
   reports: HolderReport[],
   navs: NavPoint[],
 ): HuijinEstimate[] {
+  const huijinReports = reports
+    .filter((report) => report.huijinShares > 0)
+    .sort((a, b) => a.reportDate.localeCompare(b.reportDate))
   const disclosedByDate = new Map(
-    reports
-      .filter((report) => report.huijinShares > 0)
-      .map((report) => [report.reportDate, report]),
+    huijinReports.map((report) => [report.reportDate, report]),
   )
+  // 只取最近一期汇金披露作为份额锚点，不做历史区间回填
+  const latestAnchor =
+    huijinReports.length > 0
+      ? huijinReports[huijinReports.length - 1]
+      : null
 
   return scale.map((s) => {
     const report = disclosedByDate.get(s.date)
     const nav =
       nearestNav(navs, s.date) ??
       (s.totalSharesYi > 0 ? s.netAssetYi / s.totalSharesYi : null)
-    const huijinShares = report?.huijinShares ?? null
-    const huijinValueYi =
-      huijinShares != null && nav != null ? (huijinShares * nav) / 1e8 : null
+
+    if (report) {
+      const huijinValueYi =
+        nav != null ? (report.huijinShares * nav) / 1e8 : null
+      return {
+        date: s.date,
+        netAssetYi: s.netAssetYi,
+        totalSharesYi: s.totalSharesYi,
+        huijinShares: report.huijinShares,
+        huijinValueYi:
+          huijinValueYi != null ? Number(huijinValueYi.toFixed(4)) : null,
+        huijinPct: report.huijinPercent,
+        isEstimated: false,
+        estimateMethod: 'disclosed',
+      }
+    }
+
+    // 份额锚定估算：仅在最近一期披露之后生成，假设汇金不主动赎回
+    if (
+      latestAnchor &&
+      s.date > latestAnchor.reportDate &&
+      s.frequency === 'daily' &&
+      s.totalSharesYi > 0
+    ) {
+      const totalShares = s.totalSharesYi * 1e8
+      const clampTriggered = totalShares < latestAnchor.huijinShares
+      const estShares = Math.round(
+        clampTriggered ? totalShares : latestAnchor.huijinShares,
+      )
+      const huijinValueYi =
+        nav != null ? Number(((estShares * nav) / 1e8).toFixed(4)) : null
+      return {
+        date: s.date,
+        netAssetYi: s.netAssetYi,
+        totalSharesYi: s.totalSharesYi,
+        huijinShares: estShares,
+        huijinValueYi,
+        huijinPct: clampTriggered
+          ? 100
+          : Number(
+              ((latestAnchor.huijinShares / totalShares) * 100).toFixed(2),
+            ),
+        isEstimated: true,
+        estimateMethod: 'anchored',
+        clampTriggered,
+      }
+    }
+
     return {
       date: s.date,
       netAssetYi: s.netAssetYi,
       totalSharesYi: s.totalSharesYi,
-      huijinShares,
-      huijinValueYi:
-        huijinValueYi != null ? Number(huijinValueYi.toFixed(4)) : null,
-      huijinPct: report ? report.huijinPercent : null,
+      huijinShares: null,
+      huijinValueYi: null,
+      huijinPct: null,
       isEstimated: false,
-      estimateMethod: report ? 'disclosed' : 'unavailable',
-      unavailableReason: report
-        ? undefined
-        : reports.some((item) => item.huijinShares > 0)
-          ? '非持有人披露日，不推算汇金当前持仓'
-          : '暂无汇金持仓披露',
+      estimateMethod: 'unavailable',
+      unavailableReason: !latestAnchor
+        ? '暂无汇金持仓披露'
+        : s.date <= latestAnchor.reportDate
+          ? '最近披露日及之前，仅展示正式披露点'
+          : '非日频份额数据点，不推算汇金持仓',
     }
   })
 }
@@ -1101,7 +1151,7 @@ async function buildEtfSnapshot(
         '上交所/深交所 ETF 规模（每日总份额）+ 天天基金 FundArchivesDatas type=gmbd（定期净资产）',
       quote: '东方财富 push2 / push2delay clist 完整分页（按 ETF 总市值选取）',
       huijinEstimate:
-        '仅在十大持有人报告期展示汇金披露份额、占比及按报告日附近净值计算的估值；非披露日不推算当前持仓',
+        '披露日展示正式披露份额与估值；最后披露期之后按份额锚定法估算（假设汇金不主动赎回，估算份额 = min(披露份额, 当日总份额)，总份额低于披露份额时触发 clamp 并标记可靠性下降）',
       holdersFromCache,
       holdersHistoryDeduplicated,
       holdersFetchedAt: holdersFromCache

@@ -214,6 +214,9 @@ tr:focus-visible {
 .summary-card[data-accent='purple']::before {
   background: #c084fc;
 }
+.summary-card[data-accent='orange']::before {
+  background: #fb923c;
+}
 
 .summary-card .label {
   font-size: 13px;
@@ -629,6 +632,10 @@ tr:focus-visible {
   color: var(--huijin);
   font-size: 10px;
   line-height: 1.2;
+}
+.estimate-tag.warn {
+  border-color: rgba(240, 113, 120, 0.5);
+  color: #f07178;
 }
 
 .detail-scale {

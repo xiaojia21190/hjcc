@@ -55,6 +55,10 @@ function snapshotDate() {
 function downloadEtfCsv() {
   const rows = etfs.value.map((etf) => {
     const scale = etf.scaleHistory.at(-1)
+    const anchoredPts = etf.huijinEstimateHistory.filter(
+      (p) => p.estimateMethod === 'anchored',
+    )
+    const latestAnchored = anchoredPts.at(-1) ?? null
     return [
       etf.categoryName,
       etf.code,
@@ -74,7 +78,12 @@ function downloadEtfCsv() {
       etf.latestHuijin?.marketValue != null
         ? etf.latestHuijin.marketValue / 1e8
         : null,
-      etf.latestHuijin ? '非报告期不推算，待新披露' : '暂无汇金持仓披露',
+      latestAnchored?.date ?? null,
+      latestAnchored?.huijinShares != null
+        ? latestAnchored.huijinShares / 1e8
+        : null,
+      latestAnchored?.huijinValueYi ?? null,
+      latestAnchored ? (latestAnchored.clampTriggered ? '估算(clamp)' : '估算') : '无锚点',
     ]
   })
   downloadCsv(
@@ -93,7 +102,10 @@ function downloadEtfCsv() {
       '汇金份额',
       '汇金占比%',
       '最近披露汇金估值_亿元',
-      '当前持仓状态',
+      '估算日期',
+      '估算汇金份额_亿份',
+      '估算汇金估值_亿元',
+      '持仓状态',
     ],
     rows,
   )
@@ -221,7 +233,7 @@ onMounted(reload)
             <div>
               <h2>汇金持仓趋势</h2>
               <p class="muted">
-                仅展示基金年报/半年报「十大持有人」公开披露，不使用 ETF 总份额外推当前持仓
+                实点为年报/半年报「十大持有人」披露；最近披露期之后的虚线为份额锚定估算（假设汇金不主动赎回）
               </p>
             </div>
             <div class="seg">
@@ -241,7 +253,7 @@ onMounted(reload)
                 :class="{ on: metric === 'value' }"
                 @click="metric = 'value'"
               >
-                披露估值
+                估值
               </button>
             </div>
           </div>
@@ -324,7 +336,7 @@ onMounted(reload)
             数据来源：上交所/深交所 ETF 每日总份额、新浪财经十大持有人、天天基金定期规模、东方财富
             ETF 行情/净值及中证全指日线。0AMV 按公开近似公式计算，定义参见
             <a href="https://www.compass.cn/shownews.php?nid=33751625" target="_blank" rel="noopener noreferrer">指南针说明</a>；
-            汇金持仓通常于年报/半年报披露，非实时；非报告期不根据 ETF 总份额推算汇金当前持仓。
+            汇金持仓通常于年报/半年报披露，非实时；最近披露期之后按份额锚定法估算（假设汇金不主动赎回，估算份额 = min(披露份额, 当日总份额)），估算不代表实际持仓。
           </p>
           <p>仅供研究展示，不构成投资建议。请以交易所与基金正式公告为准。</p>
         </footer>

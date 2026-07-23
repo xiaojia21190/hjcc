@@ -26,6 +26,14 @@ const items = computed(() => {
   const latestDailyShareDate = dailyShareDates.sort().at(-1) ?? null
   const disclosed = etfs.filter((etf) => etf.latestHuijin != null).length
   const cached = etfs.filter((etf) => etf.source.holdersFromCache).length
+  const anchoredEtfs = etfs.filter((etf) =>
+    etf.huijinEstimateHistory.some((p) => p.estimateMethod === 'anchored'),
+  )
+  const clampedEtfs = etfs.filter((etf) =>
+    etf.huijinEstimateHistory.some(
+      (p) => p.estimateMethod === 'anchored' && p.clampTriggered,
+    ),
+  )
 
   return [
     {
@@ -55,10 +63,22 @@ const items = computed(() => {
       tone: (disclosed === total ? 'ok' : 'partial') as QualityTone,
     },
     {
-      label: '持仓外推',
-      status: '已关闭',
-      detail: '非报告期不根据 ETF 份额推算汇金持仓',
-      tone: 'ok' as QualityTone,
+      label: '持仓估算',
+      status:
+        anchoredEtfs.length > 0
+          ? clampedEtfs.length > 0
+            ? '估算中 · 部分 clamp'
+            : '估算中'
+          : '未启用',
+      detail:
+        anchoredEtfs.length > 0
+          ? `份额锚定法 ${anchoredEtfs.length}/${total} 只${clampedEtfs.length > 0 ? ` · ${clampedEtfs.length} 只总份额低于披露汇金份额` : ''}`
+          : '无汇金披露锚点，不生成估算',
+      tone: (anchoredEtfs.length > 0
+        ? clampedEtfs.length > 0
+          ? 'partial'
+          : 'ok'
+        : 'warn') as QualityTone,
     },
   ]
 })

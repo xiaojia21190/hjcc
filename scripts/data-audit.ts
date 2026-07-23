@@ -84,16 +84,39 @@ for (const etf of data.etfs) {
   const trendDates = etf.huijinHistory.map((position) => position.reportDate)
   if (JSON.stringify(trendDates) !== JSON.stringify(disclosedDates)) errors.push(`${etf.code}: Huijin trend does not exactly match disclosure dates`)
   if ((etf.latestHuijin?.reportDate ?? null) !== (disclosedDates.at(-1) ?? null)) errors.push(`${etf.code}: latest Huijin disclosure mismatch`)
+  const latestAnchorDate = disclosedDates.at(-1) ?? null
+  const latestAnchorShares = latestAnchorDate
+    ? disclosedByDate.get(latestAnchorDate)?.huijinShares ?? null
+    : null
   for (const point of etf.huijinEstimateHistory) {
     if (point.totalSharesYi < 0 || point.netAssetYi < 0) errors.push(`${etf.code} ${point.date}: invalid estimate scale`)
-    if (point.isEstimated) errors.push(`${etf.code} ${point.date}: model-generated Huijin point is not allowed`)
-    const report = disclosedByDate.get(point.date)
-    if (report && point.estimateMethod !== 'disclosed') errors.push(`${etf.code} ${point.date}: disclosure date not marked disclosed`)
-    if (report && (point.huijinShares == null || Math.abs(point.huijinShares - report.huijinShares) > 1)) errors.push(`${etf.code} ${point.date}: aligned disclosed shares mismatch`)
-    if (report && (point.huijinPct == null || Math.abs(point.huijinPct - report.huijinPercent) > 0.02)) errors.push(`${etf.code} ${point.date}: aligned disclosed percentage mismatch`)
-    if (!report && (point.huijinShares != null || point.huijinPct != null || point.huijinValueYi != null)) errors.push(`${etf.code} ${point.date}: non-disclosure date contains Huijin holdings`)
-    if (!report && point.estimateMethod !== 'unavailable') errors.push(`${etf.code} ${point.date}: non-disclosure date not marked unavailable`)
     if (point.huijinPct != null && (point.huijinPct < 0 || point.huijinPct > 100)) errors.push(`${etf.code} ${point.date}: Huijin percentage outside 0-100`)
+    const report = disclosedByDate.get(point.date)
+    if (report) {
+      if (point.estimateMethod !== 'disclosed') errors.push(`${etf.code} ${point.date}: disclosure date not marked disclosed`)
+      if (point.isEstimated) errors.push(`${etf.code} ${point.date}: disclosed point must not be marked estimated`)
+      if (point.huijinShares == null || Math.abs(point.huijinShares - report.huijinShares) > 1) errors.push(`${etf.code} ${point.date}: aligned disclosed shares mismatch`)
+      if (point.huijinPct == null || Math.abs(point.huijinPct - report.huijinPercent) > 0.02) errors.push(`${etf.code} ${point.date}: aligned disclosed percentage mismatch`)
+    } else if (point.estimateMethod === 'anchored') {
+      if (!point.isEstimated) errors.push(`${etf.code} ${point.date}: anchored point must be marked estimated`)
+      if (!latestAnchorDate || point.date <= latestAnchorDate) errors.push(`${etf.code} ${point.date}: anchored point not after latest disclosure`)
+      if (point.huijinShares == null || !finite(point.huijinShares) || point.huijinShares < 0) errors.push(`${etf.code} ${point.date}: anchored point has invalid shares`)
+      else {
+        const totalShares = point.totalSharesYi * 1e8
+        if (point.huijinShares > totalShares + 1) errors.push(`${etf.code} ${point.date}: anchored shares exceed total shares (clamp violated)`)
+        if (latestAnchorShares != null) {
+          const expected = Math.round(Math.min(latestAnchorShares, totalShares))
+          if (Math.abs(point.huijinShares - expected) > 1) errors.push(`${etf.code} ${point.date}: anchored shares mismatch min(anchor, total)`)
+        }
+        const expectClamp = latestAnchorShares != null && totalShares < latestAnchorShares
+        if ((point.clampTriggered ?? false) !== expectClamp) errors.push(`${etf.code} ${point.date}: clampTriggered flag mismatch`)
+      }
+      if (point.huijinValueYi != null && (!finite(point.huijinValueYi) || point.huijinValueYi < 0)) errors.push(`${etf.code} ${point.date}: invalid anchored value`)
+    } else {
+      if (point.estimateMethod !== 'unavailable') errors.push(`${etf.code} ${point.date}: unexpected estimate method`)
+      if (point.isEstimated) errors.push(`${etf.code} ${point.date}: unavailable point must not be marked estimated`)
+      if (point.huijinShares != null || point.huijinPct != null || point.huijinValueYi != null) errors.push(`${etf.code} ${point.date}: unavailable point contains Huijin holdings`)
+    }
   }
   if (etf.holderReports.length === 0) warnings.push(`${etf.code}: no holder reports`)
 }

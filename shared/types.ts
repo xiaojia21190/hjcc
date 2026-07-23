@@ -94,10 +94,12 @@ export interface HuijinEstimatePoint {
   huijinValueYi: number | null
   /** 持有人报告披露的汇金占比。 */
   huijinPct: number | null
-  /** 保留兼容字段；当前口径不生成估算点。 */
+  /** true 表示该点为份额锚定估算点，非正式披露。 */
   isEstimated: boolean
-  /** 仅区分同日披露和不可推算。 */
-  estimateMethod?: 'disclosed' | 'unavailable'
+  /** disclosed 为披露日；anchored 为份额锚定估算；unavailable 为不可推算。 */
+  estimateMethod?: 'disclosed' | 'anchored' | 'unavailable'
+  /** 份额锚定估算时，总份额已低于披露汇金份额，估算值取总份额上限，可靠性下降。 */
+  clampTriggered?: boolean
   /** 汇金持仓无法可靠估算时的原因 */
   unavailableReason?: string
 }
@@ -135,7 +137,7 @@ export interface EtfSnapshot {
   holderReports: HolderReport[]
   huijinHistory: HuijinPosition[]
   latestHuijin: HuijinPosition | null
-  /** ETF 规模日期与汇金披露的对齐序列；非披露日持仓为空。 */
+  /** ETF 规模日期与汇金持仓的对齐序列：披露日为正式披露，最后披露期之后为份额锚定估算。 */
   huijinEstimateHistory: HuijinEstimatePoint[]
   source: {
     holders: string

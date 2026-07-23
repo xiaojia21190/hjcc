@@ -29,6 +29,11 @@ const rows = computed(() =>
   props.etfs.map((e, categoryOrder) => {
     const latestScale = e.scaleHistory[e.scaleHistory.length - 1]
     const latestDisclosure = e.latestHuijin
+    const anchoredPts = e.huijinEstimateHistory.filter(
+      (p) => p.estimateMethod === 'anchored',
+    )
+    const latestAnchored =
+      anchoredPts.length > 0 ? anchoredPts[anchoredPts.length - 1] : null
     return {
       code: e.code,
       categoryOrder,
@@ -53,6 +58,8 @@ const rows = computed(() =>
           ? latestDisclosure.marketValue
           : null,
       hasHuijin: !!latestDisclosure,
+      estValueYi: latestAnchored?.huijinValueYi ?? null,
+      estClamped: latestAnchored?.clampTriggered ?? false,
     }
   }),
 )
@@ -141,6 +148,7 @@ const visibleRows = computed(() => {
           <th class="num">汇金份额</th>
           <th class="num">汇金占比</th>
           <th class="num">最近披露估值</th>
+          <th class="num">估算持仓</th>
         </tr>
       </thead>
       <tbody>
@@ -176,6 +184,20 @@ const visibleRows = computed(() => {
           <td class="num mono">
             {{ yuanToYi(r.huijinMv) }}
             <span v-if="r.huijinMv != null" class="estimate-tag">披露</span>
+          </td>
+          <td
+            class="num mono"
+            :title="
+              r.estClamped
+                ? '总份额已低于披露汇金份额，估算取总份额上限，可靠性下降'
+                : r.estValueYi != null
+                  ? '份额锚定估算：假设汇金不主动赎回'
+                  : undefined
+            "
+          >
+            {{ r.estValueYi != null ? formatYi(r.estValueYi) : '—' }}
+            <span v-if="r.estClamped" class="estimate-tag warn">⚠ clamp</span>
+            <span v-else-if="r.estValueYi != null" class="estimate-tag">估算</span>
           </td>
         </tr>
       </tbody>
