@@ -15,16 +15,17 @@ const items = computed(() => {
   const quoteCount = etfs.filter(
     (etf) => etf.quote?.price != null && etf.quote.marketCap != null,
   ).length
-  const scaleCovered = etfs.filter((etf) => etf.scaleHistory.length > 0).length
-  const scaleDates = etfs
-    .map((etf) => etf.scaleHistory.at(-1)?.date)
+  const dailyShareCovered = etfs.filter((etf) =>
+    etf.scaleHistory.some((point) => point.frequency === 'daily'),
+  ).length
+  const dailyShareDates = etfs
+    .map((etf) =>
+      etf.scaleHistory.filter((point) => point.frequency === 'daily').at(-1)?.date,
+    )
     .filter((date): date is string => !!date)
-  const latestScaleDate = scaleDates.sort().at(-1) ?? null
+  const latestDailyShareDate = dailyShareDates.sort().at(-1) ?? null
   const disclosed = etfs.filter((etf) => etf.latestHuijin != null).length
   const cached = etfs.filter((etf) => etf.source.holdersFromCache).length
-  const unavailable = etfs.filter(
-    (etf) => etf.huijinEstimateHistory.at(-1)?.unavailableReason,
-  ).length
 
   return [
     {
@@ -42,10 +43,10 @@ const items = computed(() => {
       tone: (quoteCount === total ? 'ok' : 'partial') as QualityTone,
     },
     {
-      label: '规模披露',
-      status: scaleCovered === total ? '完整' : '部分可用',
-      detail: `${scaleCovered}/${total} 只 · 最新 ${latestScaleDate ?? '—'}`,
-      tone: (scaleCovered === total ? 'ok' : 'partial') as QualityTone,
+      label: 'ETF 日份额',
+      status: dailyShareCovered === total ? '完整' : '部分可用',
+      detail: `${dailyShareCovered}/${total} 只 · 最新 ${latestDailyShareDate ?? '—'}`,
+      tone: (dailyShareCovered === total ? 'ok' : 'partial') as QualityTone,
     },
     {
       label: '汇金披露',
@@ -54,10 +55,10 @@ const items = computed(() => {
       tone: (disclosed === total ? 'ok' : 'partial') as QualityTone,
     },
     {
-      label: '估算校验',
-      status: unavailable === 0 ? '通过' : '待新披露',
-      detail: unavailable === 0 ? '最新规模期均可估算' : `${unavailable} 只超出可靠估算范围`,
-      tone: (unavailable === 0 ? 'ok' : 'warn') as QualityTone,
+      label: '持仓外推',
+      status: '已关闭',
+      detail: '非报告期不根据 ETF 份额推算汇金持仓',
+      tone: 'ok' as QualityTone,
     },
   ]
 })
@@ -68,7 +69,7 @@ const items = computed(() => {
     <div class="quality-head">
       <div>
         <h2 id="data-quality-title">数据质量</h2>
-        <p class="muted">区分实时行情、定期披露、缓存快照与估算可用性</p>
+        <p class="muted">区分实时行情、官方日份额、持仓披露与未知区间</p>
       </div>
       <span class="pill mono">快照 {{ data.updatedAt.slice(0, 10) }}</span>
     </div>

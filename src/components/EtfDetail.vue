@@ -14,7 +14,6 @@ const latestScale = computed(() => {
   const history = props.etf?.scaleHistory ?? [];
   return history[history.length - 1] ?? null;
 });
-const latestEstimate = computed(() => props.etf?.huijinEstimateHistory.at(-1) ?? null);
 
 const pieOption = computed<EChartsCoreOption>(() => {
   const holders = latestReport.value?.holders ?? [];
@@ -73,7 +72,7 @@ const pieOption = computed<EChartsCoreOption>(() => {
         <p class="muted source">
           持有人来源：{{ etf.source.holders }}
           <br />
-          汇金估算口径：{{ etf.source.huijinEstimate || "份额 × 对应规模期附近单位净值" }}
+          汇金展示口径：{{ etf.source.huijinEstimate || "仅展示持有人报告期披露" }}
           <span v-if="etf.source.holdersFromCache" class="cache-note">· 持有人接口限流，本次沿用 {{ etf.source.holdersFetchedAt?.slice(0, 10) || "上次" }} 成功快照</span>
           <span v-if="etf.source.holdersHistoryDeduplicated" class="cache-note">· 历史日期响应重复，已仅保留一份已验证快照</span>
         </p>
@@ -106,8 +105,8 @@ const pieOption = computed<EChartsCoreOption>(() => {
 
     <section v-if="latestScale" class="detail-scale">
       <div class="detail-scale-head">
-        <h4>最新规模与汇金估算</h4>
-        <span class="muted mono">规模期 {{ latestScale.date }}</span>
+        <h4>最新 ETF 份额</h4>
+        <span class="muted mono">{{ latestScale.frequency === "daily" ? "交易日" : "规模期" }} {{ latestScale.date }}</span>
       </div>
       <div class="kpi-row">
         <div class="kpi">
@@ -115,29 +114,24 @@ const pieOption = computed<EChartsCoreOption>(() => {
           <div class="v mono">{{ formatShares(latestScale.totalSharesYi * 1e8) }}</div>
         </div>
         <div class="kpi">
-          <div class="k">期末净资产</div>
-          <div class="v mono">{{ formatYi(latestScale.netAssetYi) }}</div>
+          <div class="k">{{ latestScale.netAssetEstimated ? "估算基金规模" : "期末净资产" }}</div>
+          <div class="v mono">{{ latestScale.netAssetEstimated ? "≈ " : "" }}{{ formatYi(latestScale.netAssetYi) }}</div>
         </div>
         <div class="kpi">
-          <div class="k">期间净申赎</div>
+          <div class="k">{{ latestScale.frequency === "daily" ? "当日净份额变化" : "期间净申赎" }}</div>
           <div class="v mono">
-            {{ latestScale.purchaseYi != null && latestScale.redeemYi != null ? `${(latestScale.purchaseYi - latestScale.redeemYi).toFixed(2)} 亿份` : "—" }}
+            {{ latestScale.netSubscriptionYi != null ? `${latestScale.netSubscriptionYi.toFixed(2)} 亿份` : latestScale.purchaseYi != null && latestScale.redeemYi != null ? `${(latestScale.purchaseYi - latestScale.redeemYi).toFixed(2)} 亿份` : "—" }}
           </div>
         </div>
         <div class="kpi">
-          <div class="k">汇金估算市值</div>
-          <div class="v mono">{{ latestEstimate?.huijinValueYi != null ? formatYi(latestEstimate.huijinValueYi) : "待新披露" }}</div>
+          <div class="k">汇金当前持仓</div>
+          <div class="v mono">待新披露</div>
         </div>
         <div class="kpi">
-          <div class="k">汇金估算占比</div>
-          <div class="v mono huijin">{{ formatPct(latestEstimate?.huijinPct) }}</div>
+          <div class="k">汇金当前占比</div>
+          <div class="v mono huijin">待新披露</div>
         </div>
-        <div v-if="latestEstimate?.unavailableReason" class="estimate-note">
-          {{ latestEstimate.unavailableReason }}
-        </div>
-        <div v-else-if="latestEstimate?.estimateMethod === 'ratio-anchored'" class="estimate-note">按最近披露汇金占比锚定本期总份额，再乘规模期单位净值估算；不代表实时持仓</div>
-        <div v-else-if="latestEstimate?.estimateMethod === 'interpolated'" class="estimate-note">按相邻持有人披露期的汇金份额线性插值，并乘规模期单位净值估算</div>
-        <div v-else-if="latestEstimate?.isEstimated" class="estimate-note">份额沿用最近一期汇金披露，汇金市值按规模期单位净值估算</div>
+        <div class="estimate-note">ETF 总份额变化不能识别持有人，非报告期不推算汇金份额、占比或市值</div>
       </div>
     </section>
 

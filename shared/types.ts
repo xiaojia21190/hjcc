@@ -53,7 +53,15 @@ export interface ScalePoint {
   netAssetYi: number
   purchaseYi: number | null
   redeemYi: number | null
+  /** 相对上一交易日的基金总份额净变化（亿份）；不是申购、赎回毛额。 */
+  netSubscriptionYi?: number | null
   netAssetChangePct: number | null
+  /** daily 为交易所日频规模，periodic 为基金定期规模披露。 */
+  frequency?: 'daily' | 'periodic'
+  /** 总份额字段的数据来源。 */
+  shareSource?: 'sse' | 'szse' | 'eastmoney'
+  /** true 表示净资产由总份额 × 当日附近单位净值推算。 */
+  netAssetEstimated?: boolean
 }
 
 export interface NavPoint {
@@ -67,10 +75,10 @@ export interface HuijinPosition {
   reportDate: string
   shares: number
   percent: number
-  /** 估算市值（元）= 份额 * 报告日附近净值；无净值时为 null */
+  /** 披露估值（元）= 报告期份额 * 报告日附近净值；无净值时为 null。 */
   marketValue: number | null
   entities: { name: string; shares: number; percent: number }[]
-  /** true 表示根据已验证披露对规模期做的估算，不是同日公告 */
+  /** 兼容字段；当前披露趋势不允许估算点。 */
   isEstimated?: boolean
 }
 
@@ -80,21 +88,16 @@ export interface HuijinEstimatePoint {
   netAssetYi: number
   /** 期末总份额（亿份） */
   totalSharesYi: number
-  /** 用于估算的汇金份额；没有历史披露时为 null */
+  /** 同日持有人报告披露的汇金份额；非披露日为 null。 */
   huijinShares: number | null
-  /** 汇金估算市值（亿元） */
+  /** 披露份额按报告日附近单位净值计算的估值（亿元）。 */
   huijinValueYi: number | null
-  /** 汇金估算市值 / 期末基金净资产 */
+  /** 持有人报告披露的汇金占比。 */
   huijinPct: number | null
-  /** true 表示该点不是同日持有人披露，而是模型估算 */
+  /** 保留兼容字段；当前口径不生成估算点。 */
   isEstimated: boolean
-  /** 估算方法：披露值、披露期之间插值、沿用份额或按披露占比锚定 */
-  estimateMethod?:
-    | 'disclosed'
-    | 'interpolated'
-    | 'carry-forward'
-    | 'ratio-anchored'
-    | 'unavailable'
+  /** 仅区分同日披露和不可推算。 */
+  estimateMethod?: 'disclosed' | 'unavailable'
   /** 汇金持仓无法可靠估算时的原因 */
   unavailableReason?: string
 }
@@ -132,7 +135,7 @@ export interface EtfSnapshot {
   holderReports: HolderReport[]
   huijinHistory: HuijinPosition[]
   latestHuijin: HuijinPosition | null
-  /** ETF 规模期的汇金份额/市值估算序列 */
+  /** ETF 规模日期与汇金披露的对齐序列；非披露日持仓为空。 */
   huijinEstimateHistory: HuijinEstimatePoint[]
   source: {
     holders: string
@@ -155,6 +158,7 @@ export interface DashboardData {
   /** 0AMV 的定义、计算口径和数据来源说明。 */
   marketActiveCapSource: string
   summary: {
+    /** 各 ETF 最近一期汇金披露份额按报告日附近净值计算的合计估值（元）。 */
     totalHuijinMarketValue: number | null
     /** 最新市场 0AMV 活筹指数估算值（亿元）。 */
     latestActiveCapYi: number | null

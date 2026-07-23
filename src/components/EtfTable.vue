@@ -28,7 +28,7 @@ const sort = ref<TableSort>('category')
 const rows = computed(() =>
   props.etfs.map((e, categoryOrder) => {
     const latestScale = e.scaleHistory[e.scaleHistory.length - 1]
-    const latestEstimate = e.huijinEstimateHistory.at(-1)
+    const latestDisclosure = e.latestHuijin
     return {
       code: e.code,
       categoryOrder,
@@ -38,35 +38,34 @@ const rows = computed(() =>
       changePct: e.quote?.changePct,
       totalSharesYi: latestScale?.totalSharesYi ?? null,
       shareChangeYi:
-        latestScale?.purchaseYi != null && latestScale?.redeemYi != null
+        latestScale?.netSubscriptionYi ??
+        (latestScale?.purchaseYi != null && latestScale?.redeemYi != null
           ? latestScale.purchaseYi - latestScale.redeemYi
-          : null,
+          : null),
       netAssetYi: latestScale?.netAssetYi ?? null,
+      netAssetEstimated: latestScale?.netAssetEstimated ?? false,
       scaleDate: latestScale?.date ?? null,
-      estimateUnavailableReason:
-        latestEstimate?.unavailableReason ?? null,
-      estimateMethod: latestEstimate?.estimateMethod ?? null,
-      reportDate: e.latestHuijin?.reportDate ?? null,
-      huijinShares: e.latestHuijin?.shares ?? null,
-      huijinPercent: e.latestHuijin?.percent ?? null,
+      reportDate: latestDisclosure?.reportDate ?? null,
+      huijinShares: latestDisclosure?.shares ?? null,
+      huijinPercent: latestDisclosure?.percent ?? null,
       huijinMv:
-        latestEstimate?.huijinValueYi != null
-          ? latestEstimate.huijinValueYi * 1e8
+        latestDisclosure?.marketValue != null
+          ? latestDisclosure.marketValue
           : null,
-      hasHuijin: !!e.latestHuijin,
+      hasHuijin: !!latestDisclosure,
     }
   }),
 )
 
 const disclosedCount = computed(() => rows.value.filter((row) => row.hasHuijin).length)
 const attentionCount = computed(
-  () => rows.value.filter((row) => !row.hasHuijin || row.estimateUnavailableReason).length,
+  () => rows.value.filter((row) => !row.hasHuijin).length,
 )
 
 const visibleRows = computed(() => {
   const output = rows.value.filter((row) => {
     if (filter.value === 'disclosed') return row.hasHuijin
-    if (filter.value === 'attention') return !row.hasHuijin || !!row.estimateUnavailableReason
+    if (filter.value === 'attention') return !row.hasHuijin
     return true
   })
 
@@ -134,14 +133,14 @@ const visibleRows = computed(() => {
           <th>名称</th>
           <th class="num">现价</th>
           <th class="num">涨跌</th>
-          <th>规模期</th>
+          <th>份额日期</th>
           <th class="num">基金总份额</th>
-          <th class="num">份额变动</th>
-          <th class="num">净资产</th>
+          <th class="num">净份额变化</th>
+          <th class="num">基金规模</th>
           <th>报告期</th>
           <th class="num">汇金份额</th>
           <th class="num">汇金占比</th>
-          <th class="num">最新估算市值</th>
+          <th class="num">最近披露估值</th>
         </tr>
       </thead>
       <tbody>
@@ -168,17 +167,15 @@ const visibleRows = computed(() => {
           <td class="num mono" :class="changeClass(r.shareChangeYi)">
             {{ r.shareChangeYi != null ? `${r.shareChangeYi.toFixed(2)} 亿份` : '—' }}
           </td>
-          <td class="num mono">{{ formatYi(r.netAssetYi) }}</td>
+          <td class="num mono" :title="r.netAssetEstimated ? '总份额 × 当日附近单位净值估算' : undefined">
+            {{ r.netAssetEstimated ? '≈ ' : '' }}{{ formatYi(r.netAssetYi) }}
+          </td>
           <td class="mono">{{ r.reportDate || '—' }}</td>
           <td class="num mono">{{ formatShares(r.huijinShares) }}</td>
           <td class="num mono huijin">{{ formatPct(r.huijinPercent) }}</td>
-          <td class="num mono" :title="r.estimateUnavailableReason || undefined">
+          <td class="num mono">
             {{ yuanToYi(r.huijinMv) }}
-            <span v-if="r.estimateUnavailableReason" class="estimate-tag">不可估算</span>
-            <span
-              v-else-if="r.estimateMethod && r.estimateMethod !== 'disclosed'"
-              class="estimate-tag"
-            >模型</span>
+            <span v-if="r.huijinMv != null" class="estimate-tag">披露</span>
           </td>
         </tr>
       </tbody>

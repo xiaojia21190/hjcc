@@ -13,30 +13,25 @@ const props = defineProps<{
 }>()
 
 const cards = computed(() => {
-  const estimates = props.etfs
-    .map((etf) => ({ etf, point: etf.huijinEstimateHistory.at(-1) }))
-    .filter(({ point }) => point?.huijinValueYi != null)
+  const disclosures = props.etfs
+    .map((etf) => etf.latestHuijin)
+    .filter((point): point is NonNullable<typeof point> => point != null)
   const avgPct =
-    estimates.length > 0
-      ? estimates.reduce((s, { point }) => s + (point?.huijinPct ?? 0), 0) /
-        estimates.length
+    disclosures.length > 0
+      ? disclosures.reduce((sum, point) => sum + point.percent, 0) /
+        disclosures.length
       : null
-  const totalShares = estimates.reduce(
-    (s, { point }) => s + (point?.huijinShares ?? 0),
+  const totalShares = disclosures.reduce(
+    (sum, point) => sum + point.shares,
     0,
   )
-  const latestScaleDate = props.etfs
-    .map((etf) => etf.scaleHistory.at(-1)?.date)
-    .filter((date): date is string => !!date)
-    .sort()
-    .at(-1)
   return [
     {
-      label: '汇金估算合计市值',
+      label: '汇金最近披露合计估值',
       value: yuanToYi(props.totalMv ?? null),
-      sub: latestScaleDate
-        ? `规模期 ${latestScaleDate} · 可估算 ${estimates.length}/${props.etfs.length} 只`
-        : '暂无规模期',
+      sub: props.latestReport
+        ? `最近报告期 ${props.latestReport} · 已披露 ${disclosures.length}/${props.etfs.length} 只`
+        : '暂无汇金持仓披露',
       accent: 'gold',
     },
     {
@@ -48,15 +43,15 @@ const cards = computed(() => {
       accent: 'blue',
     },
     {
-      label: '汇金估算合计份额',
+      label: '汇金最近披露合计份额',
       value: formatShares(totalShares),
-      sub: '按最近公开持有人披露锚定估算',
+      sub: '各基金最新公开持有人报告合计',
       accent: 'teal',
     },
     {
       label: '监测 ETF / 平均占比',
       value: `${props.etfs.length} 只`,
-      sub: `可估算 ${estimates.length} 只 · 平均 ${formatPct(avgPct)}`,
+      sub: `已披露 ${disclosures.length} 只 · 披露占比平均 ${formatPct(avgPct)}`,
       accent: 'purple',
     },
   ]

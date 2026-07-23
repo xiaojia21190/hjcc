@@ -14,6 +14,7 @@ const props = withDefaults(
 )
 
 const palette = ['#3d9cf0', '#5eead4', '#f0b429', '#c084fc', '#f07178', '#7fd99a']
+const OFFICIAL_DISPLAY_POINTS = 250
 const axisStyle = {
   axisLine: { lineStyle: { color: 'rgba(148,163,184,0.25)' } },
   axisLabel: { color: '#93a4b8', fontSize: 11 },
@@ -62,13 +63,17 @@ function shareValueFormatter(value: unknown) {
 
 const option = computed<EChartsCoreOption>(() => {
   if (props.mode === 'single' && props.etf) {
-    const hist = props.etf.scaleHistory.slice(-24)
+    const dailyHistory = props.etf.scaleHistory.filter(
+      (point) => point.frequency === 'daily',
+    )
+    const hist = dailyHistory.length
+      ? dailyHistory.slice(-OFFICIAL_DISPLAY_POINTS)
+      : props.etf.scaleHistory.slice(-24)
+    const hasDaily = dailyHistory.length > 0
     const huijinMap = new Map(
-      props.etf.huijinEstimateHistory.map((point) => [
-        point.date,
-        point.huijinValueYi != null && point.huijinShares != null
-          ? point.huijinShares / 1e8
-          : null,
+      props.etf.huijinHistory.map((point) => [
+        point.reportDate,
+        point.shares / 1e8,
       ]),
     )
     return {
@@ -94,7 +99,7 @@ const option = computed<EChartsCoreOption>(() => {
         },
         {
           type: 'value',
-          name: '净申赎（亿份）',
+          name: '净变化（亿份）',
           nameTextStyle: { color: '#6b7c90' },
           ...axisStyle,
         },
@@ -104,7 +109,7 @@ const option = computed<EChartsCoreOption>(() => {
           name: 'ETF 总份额',
           type: 'line',
           smooth: false,
-          showSymbol: true,
+          showSymbol: hist.length < 80,
           symbolSize: 5,
           data: hist.map((point) => [point.date, point.totalSharesYi]),
           itemStyle: { color: palette[0] },
@@ -112,7 +117,7 @@ const option = computed<EChartsCoreOption>(() => {
           areaStyle: { color: 'rgba(61,156,240,0.10)' },
         },
         {
-          name: '汇金估算份额',
+          name: '汇金披露份额',
           type: 'line',
           smooth: false,
           connectNulls: false,
@@ -123,15 +128,16 @@ const option = computed<EChartsCoreOption>(() => {
           lineStyle: { width: 1.8, type: 'dashed' },
         },
         {
-          name: '期间净申赎',
+          name: hasDaily ? '每日净份额变化' : '期间净申赎',
           type: 'bar',
           yAxisIndex: 1,
           barMaxWidth: 14,
           data: hist.map((point) => [
             point.date,
-            point.purchaseYi != null && point.redeemYi != null
-              ? Number((point.purchaseYi - point.redeemYi).toFixed(2))
-              : null,
+            point.netSubscriptionYi ??
+              (point.purchaseYi != null && point.redeemYi != null
+                ? Number((point.purchaseYi - point.redeemYi).toFixed(2))
+                : null),
           ]),
           itemStyle: { color: 'rgba(94,234,212,0.42)' },
         },
@@ -139,19 +145,23 @@ const option = computed<EChartsCoreOption>(() => {
     }
   }
 
-  const allDates = props.etfs.flatMap((etf) =>
-    etf.scaleHistory.map((point) => point.date),
+  const displayHistories = props.etfs.map((etf) => {
+    const daily = etf.scaleHistory.filter((point) => point.frequency === 'daily')
+    return { etf, history: daily.length ? daily.slice(-OFFICIAL_DISPLAY_POINTS) : etf.scaleHistory }
+  })
+  const allDates = displayHistories.flatMap(({ history }) =>
+    history.map((point) => point.date),
   )
   const cutoff = recentCutoff(allDates)
-  const series = props.etfs.map((etf, index) => {
+  const series = displayHistories.map(({ etf, history: fullHistory }, index) => {
     const history = cutoff
-      ? etf.scaleHistory.filter((point) => point.date >= cutoff)
-      : etf.scaleHistory
+      ? fullHistory.filter((point) => point.date >= cutoff)
+      : fullHistory
     return {
       name: `${etf.categoryName} · 总份额`,
       type: 'line' as const,
       smooth: false,
-      showSymbol: true,
+      showSymbol: history.length < 80,
       symbolSize: 4,
       lineStyle: { width: 2 },
       itemStyle: { color: palette[index % palette.length] },

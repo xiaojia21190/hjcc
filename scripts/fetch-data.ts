@@ -73,6 +73,7 @@ async function fetchText(
           Referer: referer,
           Accept: '*/*',
         },
+        signal: AbortSignal.timeout(20_000),
       })
       if (!res.ok) throw new Error(`HTTP ${res.status} ${url}`)
       const buf = await res.arrayBuffer()
@@ -537,6 +538,269 @@ function parseNumberYi(text: string): number | null {
   return Number.isFinite(n) ? n : null
 }
 
+interface OfficialDailySharePoint {
+  date: string
+  totalSharesYi: number
+  shareSource: 'sse' | 'szse'
+}
+
+interface SseScaleResponse {
+  result?: Array<{
+    STAT_DATE?: string
+    SEC_CODE?: string
+    TOT_VOL?: string | number
+  }>
+}
+
+interface SzseScaleRow {
+  size_date?: string
+  fund_code?: string
+  current_size?: string | number
+}
+
+interface SzseScaleResponse {
+  data?: SzseScaleRow | SzseScaleRow[] | null
+  metadata?: {
+    pagecount?: number
+  }
+  error?: string | null
+}
+
+const OFFICIAL_SHARE_BACKFILL_TRADING_DAYS = 250
+const OFFICIAL_SHARE_OVERLAP_TRADING_DAYS = 5
+
+function officialPointsFromSnapshot(
+  snapshot?: EtfSnapshot,
+): OfficialDailySharePoint[] {
+  if (!snapshot) return []
+  return snapshot.scaleHistory
+    .filter(
+      (point) =>
+        point.frequency === 'daily' &&
+        (point.shareSource === 'sse' || point.shareSource === 'szse'),
+    )
+    .map((point) => ({
+      date: point.date,
+      totalSharesYi: point.totalSharesYi,
+      shareSource: point.shareSource as 'sse' | 'szse',
+    }))
+    .sort((a, b) => a.date.localeCompare(b.date))
+}
+
+function mergeOfficialPoints(
+  previous: OfficialDailySharePoint[],
+  fetched: OfficialDailySharePoint[],
+): OfficialDailySharePoint[] {
+  const byDate = new Map(previous.map((point) => [point.date, point]))
+  for (const point of fetched) byDate.set(point.date, point)
+  return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date))
+}
+
+function fallbackWeekdays(): string[] {
+  const dates: string[] = []
+  const cursor = new Date()
+  for (let offset = 0; offset < 420; offset++) {
+    const day = new Date(cursor)
+    day.setUTCDate(day.getUTCDate() - offset)
+    if (day.getUTCDay() !== 0 && day.getUTCDay() !== 6) {
+      dates.push(day.toISOString().slice(0, 10))
+    }
+  }
+  return dates.reverse()
+}
+
+function officialFetchDates(
+  existing: OfficialDailySharePoint[],
+  marketDates: string[],
+): string[] {
+  const dates = marketDates.length ? marketDates : fallbackWeekdays()
+  const latestExisting = existing.at(-1)?.date
+  if (!latestExisting) {
+    return dates.slice(-OFFICIAL_SHARE_BACKFILL_TRADING_DAYS)
+  }
+  const nextIndex = dates.findIndex((date) => date > latestExisting)
+  const anchor = nextIndex >= 0 ? nextIndex : dates.length - 1
+  return dates.slice(Math.max(0, anchor - OFFICIAL_SHARE_OVERLAP_TRADING_DAYS))
+}
+
+async function fetchSseDailyShares(
+  codes: string[],
+  dates: string[],
+): Promise<Map<string, OfficialDailySharePoint[]>> {
+  const wanted = new Set(codes)
+  const fetched = new Map(codes.map((code) => [code, [] as OfficialDailySharePoint[]]))
+  for (let start = 0; start < dates.length; start += 4) {
+    const batch = dates.slice(start, start + 4)
+    await Promise.all(
+      batch.map(async (date) => {
+        const params = new URLSearchParams({
+          sqlId: 'COMMON_SSE_ZQPZ_ETFZL_XXPL_ETFGM_SEARCH_L',
+          isPagination: 'true',
+          'pageHelp.pageSize': '10000',
+          'pageHelp.pageNo': '1',
+          'pageHelp.beginPage': '1',
+          'pageHelp.endPage': '1',
+          STAT_DATE: date,
+        })
+        try {
+          const json = await fetchJson<SseScaleResponse>(
+            `https://query.sse.com.cn/commonQuery.do?${params}`,
+            'https://www.sse.com.cn/assortment/fund/etf/list/scale/',
+          )
+          for (const row of json.result ?? []) {
+            const code = String(row.SEC_CODE ?? '')
+            if (!wanted.has(code)) continue
+            const sharesWan = Number(String(row.TOT_VOL ?? '').replace(/,/g, ''))
+            if (!Number.isFinite(sharesWan) || sharesWan < 0) continue
+            fetched.get(code)?.push({
+              date: String(row.STAT_DATE ?? date).slice(0, 10),
+              totalSharesYi: Number((sharesWan / 10000).toFixed(6)),
+              shareSource: 'sse',
+            })
+          }
+        } catch (error) {
+          console.warn(`  上交所 ETF 份额 ${date} 抓取失败`, error)
+        }
+      }),
+    )
+    await sleep(80)
+  }
+  return fetched
+}
+
+function splitDateRanges(start: string, end: string): Array<[string, string]> {
+  const ranges: Array<[string, string]> = []
+  let cursor = new Date(`${start}T00:00:00Z`)
+  const final = new Date(`${end}T00:00:00Z`)
+  while (cursor <= final) {
+    const rangeEnd = new Date(cursor)
+    rangeEnd.setUTCDate(rangeEnd.getUTCDate() + 169)
+    if (rangeEnd > final) rangeEnd.setTime(final.getTime())
+    ranges.push([
+      cursor.toISOString().slice(0, 10),
+      rangeEnd.toISOString().slice(0, 10),
+    ])
+    cursor = new Date(rangeEnd)
+    cursor.setUTCDate(cursor.getUTCDate() + 1)
+  }
+  return ranges
+}
+
+function normalizeSzseRows(data: SzseScaleResponse['data']): SzseScaleRow[] {
+  if (!data) return []
+  return Array.isArray(data) ? data : [data]
+}
+
+async function fetchSzseDailyShares(
+  code: string,
+  startDate: string,
+  endDate: string,
+): Promise<OfficialDailySharePoint[]> {
+  const points: OfficialDailySharePoint[] = []
+  for (const [rangeStart, rangeEnd] of splitDateRanges(startDate, endDate)) {
+    let page = 1
+    let pageCount = 1
+    do {
+      const params = new URLSearchParams({
+        SHOWTYPE: 'JSON',
+        CATALOGID: 'scsj_fund_jjgm',
+        jjlb: 'ETF',
+        txtDm: code,
+        txtStart: rangeStart,
+        txtEnd: rangeEnd,
+        PAGENO: String(page),
+      })
+      try {
+        const response = await fetchJson<SzseScaleResponse | SzseScaleResponse[]>(
+          `https://www.szse.cn/api/report/ShowReport/data?${params}`,
+          'https://www.szse.cn/market/fund/volume/etf/index.html',
+        )
+        const json = Array.isArray(response) ? response[0] : response
+        if (!json) throw new Error('深交所规模接口返回空数组')
+        if (json.error) throw new Error(json.error)
+        pageCount = Math.max(1, Number(json.metadata?.pagecount) || 1)
+        for (const row of normalizeSzseRows(json.data)) {
+          if (String(row.fund_code ?? '') !== code) continue
+          const sharesWan = Number(
+            String(row.current_size ?? '').replace(/,/g, ''),
+          )
+          if (!Number.isFinite(sharesWan) || sharesWan < 0 || !row.size_date) {
+            continue
+          }
+          points.push({
+            date: row.size_date.slice(0, 10),
+            totalSharesYi: Number((sharesWan / 10000).toFixed(6)),
+            shareSource: 'szse',
+          })
+        }
+      } catch (error) {
+        console.warn(
+          `  深交所 ETF 份额 ${code} ${rangeStart}..${rangeEnd} 第 ${page} 页抓取失败`,
+          error,
+        )
+        break
+      }
+      page += 1
+      await sleep(80)
+    } while (page <= pageCount)
+  }
+  return mergeOfficialPoints([], points)
+}
+
+async function fetchOfficialShareHistories(
+  picks: Array<{ quote: EtfQuote }>,
+  previous: DashboardData | null,
+  marketDates: string[],
+): Promise<Map<string, OfficialDailySharePoint[]>> {
+  const histories = new Map<string, OfficialDailySharePoint[]>()
+  const fetchDatesByCode = new Map<string, string[]>()
+  for (const { quote } of picks) {
+    const prior = officialPointsFromSnapshot(
+      previous?.etfs.find((etf) => etf.code === quote.code),
+    )
+    histories.set(quote.code, prior)
+    fetchDatesByCode.set(quote.code, officialFetchDates(prior, marketDates))
+  }
+
+  const shCodes = picks
+    .map(({ quote }) => quote)
+    .filter((quote) => quote.market === 'SH')
+    .map((quote) => quote.code)
+  const shDates = [
+    ...new Set(shCodes.flatMap((code) => fetchDatesByCode.get(code) ?? [])),
+  ].sort()
+  if (shCodes.length && shDates.length) {
+    const fetched = await fetchSseDailyShares(shCodes, shDates)
+    for (const code of shCodes) {
+      histories.set(
+        code,
+        mergeOfficialPoints(histories.get(code) ?? [], fetched.get(code) ?? []),
+      )
+    }
+    console.log(`上交所 ETF 日份额：${shCodes.length} 只，查询 ${shDates.length} 个交易日`)
+  }
+
+  const szQuotes = picks
+    .map(({ quote }) => quote)
+    .filter((quote) => quote.market === 'SZ')
+  for (const quote of szQuotes) {
+    const dates = fetchDatesByCode.get(quote.code) ?? []
+    if (!dates.length) continue
+    const fetched = await fetchSzseDailyShares(
+      quote.code,
+      dates[0],
+      dates[dates.length - 1],
+    )
+    histories.set(
+      quote.code,
+      mergeOfficialPoints(histories.get(quote.code) ?? [], fetched),
+    )
+    console.log(`深交所 ETF 日份额：${quote.code} 共 ${histories.get(quote.code)?.length ?? 0} 条`)
+  }
+
+  return histories
+}
+
 async function fetchScaleHistory(code: string): Promise<ScalePoint[]> {
   const url = `https://fundf10.eastmoney.com/FundArchivesDatas.aspx?type=gmbd&code=${code}&mode=0&rt=${Math.random()}`
   const text = await fetchText(url, 'https://fundf10.eastmoney.com/')
@@ -555,6 +819,9 @@ async function fetchScaleHistory(code: string): Promise<ScalePoint[]> {
       totalSharesYi: parseNumberYi(match[4]) ?? 0,
       netAssetYi: parseNumberYi(match[5]) ?? 0,
       netAssetChangePct: parseNumberYi(match[6]),
+      frequency: 'periodic',
+      shareSource: 'eastmoney',
+      netAssetEstimated: false,
     })
   }
   points.sort((a, b) => a.date.localeCompare(b.date))
@@ -620,6 +887,66 @@ function nearestNav(
   return null
 }
 
+function mergeScaleHistory(
+  periodic: ScalePoint[],
+  official: OfficialDailySharePoint[],
+  navs: NavPoint[],
+): ScalePoint[] {
+  if (!official.length) {
+    return periodic
+      .map((point) => ({
+        ...point,
+        frequency: point.frequency ?? 'periodic',
+        shareSource: point.shareSource ?? 'eastmoney',
+        netAssetEstimated: point.netAssetEstimated ?? false,
+      }))
+      .sort((a, b) => a.date.localeCompare(b.date))
+  }
+
+  const periodicByDate = new Map(periodic.map((point) => [point.date, point]))
+  const daily: ScalePoint[] = []
+  let prior: OfficialDailySharePoint | null = null
+  for (const point of official) {
+    const disclosed = periodicByDate.get(point.date)
+    const nav = nearestNav(navs, point.date)
+    const estimatedNetAsset =
+      disclosed?.netAssetYi && disclosed.netAssetYi > 0
+        ? disclosed.netAssetYi
+        : nav != null
+          ? Number((point.totalSharesYi * nav).toFixed(6))
+          : 0
+    const netSubscriptionYi = prior
+      ? Number((point.totalSharesYi - prior.totalSharesYi).toFixed(6))
+      : null
+    daily.push({
+      date: point.date,
+      totalSharesYi: point.totalSharesYi,
+      purchaseYi: disclosed?.purchaseYi ?? null,
+      redeemYi: disclosed?.redeemYi ?? null,
+      netSubscriptionYi,
+      netAssetYi: estimatedNetAsset,
+      netAssetChangePct: disclosed?.netAssetChangePct ?? null,
+      frequency: 'daily',
+      shareSource: point.shareSource,
+      netAssetEstimated: !(disclosed?.netAssetYi && disclosed.netAssetYi > 0),
+    })
+    prior = point
+  }
+
+  const dailyDates = new Set(daily.map((point) => point.date))
+  return [
+    ...periodic.filter((point) => !dailyDates.has(point.date)),
+    ...daily,
+  ]
+    .map((point) => ({
+      ...point,
+      frequency: point.frequency ?? 'periodic',
+      shareSource: point.shareSource ?? 'eastmoney',
+      netAssetEstimated: point.netAssetEstimated ?? false,
+    }))
+    .sort((a, b) => a.date.localeCompare(b.date))
+}
+
 function buildHuijinHistory(
   reports: HolderReport[],
   navs: NavPoint[],
@@ -663,70 +990,20 @@ function buildHuijinEstimate(
   reports: HolderReport[],
   navs: NavPoint[],
 ): HuijinEstimate[] {
-  const disclosed = reports
-    .filter((r) => r.huijinShares > 0)
-    .sort((a, b) => a.reportDate.localeCompare(b.reportDate))
+  const disclosedByDate = new Map(
+    reports
+      .filter((report) => report.huijinShares > 0)
+      .map((report) => [report.reportDate, report]),
+  )
 
   return scale.map((s) => {
-    let priorReport: HolderReport | null = null
-    let nextReport: HolderReport | null = null
-    for (const report of disclosed) {
-      if (report.reportDate <= s.date) priorReport = report
-      else {
-        nextReport = report
-        break
-      }
-    }
+    const report = disclosedByDate.get(s.date)
     const nav =
       nearestNav(navs, s.date) ??
       (s.totalSharesYi > 0 ? s.netAssetYi / s.totalSharesYi : null)
-    let huijinShares: number | null = null
-    let estimateMethod: HuijinEstimate['estimateMethod'] = 'unavailable'
-    let unavailableReason: string | undefined
-
-    if (priorReport && priorReport.reportDate === s.date) {
-      huijinShares = priorReport.huijinShares
-      estimateMethod = 'disclosed'
-    } else if (priorReport && nextReport && nextReport.reportDate > s.date) {
-      // 两个已披露报告期之间，用持仓份额按日期线性插值，避免把季度变化画成突变。
-      const start = Date.parse(`${priorReport.reportDate}T00:00:00Z`)
-      const end = Date.parse(`${nextReport.reportDate}T00:00:00Z`)
-      const current = Date.parse(`${s.date}T00:00:00Z`)
-      const ratio = end > start ? Math.max(0, Math.min(1, (current - start) / (end - start))) : 0
-      huijinShares = Math.round(
-        priorReport.huijinShares + (nextReport.huijinShares - priorReport.huijinShares) * ratio,
-      )
-      estimateMethod = 'interpolated'
-    } else if (priorReport) {
-      // 披露之后只有一个锚点时，优先沿用份额；若超过本期总份额，则按披露占比锚定。
-      const carryShares = priorReport.huijinShares
-      if (carryShares <= s.totalSharesYi * 1e8 * 1.01) {
-        huijinShares = carryShares
-        estimateMethod = 'carry-forward'
-      } else {
-        const disclosedPct = Math.max(0, Math.min(100, priorReport.huijinPercent))
-        huijinShares = s.totalSharesYi > 0
-          ? Math.round(s.totalSharesYi * 1e8 * disclosedPct / 100)
-          : null
-        estimateMethod = huijinShares != null ? 'ratio-anchored' : 'unavailable'
-        unavailableReason =
-          huijinShares == null ? '本期总份额缺失，无法按最近披露占比估算' : undefined
-      }
-    } else {
-      unavailableReason = disclosed.length
-        ? '暂无不晚于本期的汇金披露，无法回溯估算'
-        : '暂无汇金持仓披露'
-    }
-
-    if (huijinShares != null && s.totalSharesYi > 0) {
-      huijinShares = Math.max(0, Math.min(huijinShares, s.totalSharesYi * 1e8))
-    }
+    const huijinShares = report?.huijinShares ?? null
     const huijinValueYi =
       huijinShares != null && nav != null ? (huijinShares * nav) / 1e8 : null
-    const huijinPct =
-      huijinValueYi != null && s.netAssetYi > 0
-        ? (huijinValueYi / s.netAssetYi) * 100
-        : null
     return {
       date: s.date,
       netAssetYi: s.netAssetYi,
@@ -734,63 +1011,22 @@ function buildHuijinEstimate(
       huijinShares,
       huijinValueYi:
         huijinValueYi != null ? Number(huijinValueYi.toFixed(4)) : null,
-      huijinPct: huijinPct != null ? Number(huijinPct.toFixed(4)) : null,
-      isEstimated: estimateMethod !== 'disclosed' && estimateMethod !== 'unavailable',
-      estimateMethod,
-      unavailableReason,
+      huijinPct: report ? report.huijinPercent : null,
+      isEstimated: false,
+      estimateMethod: report ? 'disclosed' : 'unavailable',
+      unavailableReason: report
+        ? undefined
+        : reports.some((item) => item.huijinShares > 0)
+          ? '非持有人披露日，不推算汇金当前持仓'
+          : '暂无汇金持仓披露',
     }
   })
-}
-
-function buildHuijinTrend(
-  disclosed: HuijinPosition[],
-  estimates: HuijinEstimate[],
-): HuijinPosition[] {
-  if (!disclosed.length) return []
-  const actualByDate = new Map(disclosed.map((point) => [point.reportDate, point]))
-  const latest = disclosed[disclosed.length - 1]
-  const estimated = estimates
-    .filter((point) => point.huijinValueYi != null && point.huijinShares != null)
-    .filter((point) => !actualByDate.has(point.date))
-    .map((point) => {
-      const estimatedShares = point.huijinShares as number
-      const estimatedPercent =
-        point.totalSharesYi > 0
-          ? Number(((estimatedShares / (point.totalSharesYi * 1e8)) * 100).toFixed(4))
-          : 0
-      let assignedShares = 0
-      let assignedPercent = 0
-      const entities = latest.entities.map((entity, index) => {
-        const isLast = index === latest.entities.length - 1
-        const shares = isLast
-          ? estimatedShares - assignedShares
-          : Math.round((entity.shares / latest.shares) * estimatedShares)
-        const percent = isLast
-          ? Number((estimatedPercent - assignedPercent).toFixed(4))
-          : Number(((shares / estimatedShares) * estimatedPercent).toFixed(4))
-        assignedShares += shares
-        assignedPercent += percent
-        return { ...entity, shares, percent }
-      })
-      return {
-        reportDate: point.date,
-        shares: estimatedShares,
-        percent: estimatedPercent,
-        marketValue:
-          point.huijinValueYi != null ? point.huijinValueYi * 1e8 : null,
-        entities,
-        isEstimated: true,
-      } satisfies HuijinPosition
-    })
-
-  return [...disclosed, ...estimated].sort((a, b) =>
-    a.reportDate.localeCompare(b.reportDate),
-  )
 }
 
 async function buildEtfSnapshot(
   category: (typeof CATEGORIES)[number],
   quote: EtfQuote,
+  officialDailyShares: OfficialDailySharePoint[],
   previous?: EtfSnapshot,
 ): Promise<EtfSnapshot> {
   const code = quote.code
@@ -812,17 +1048,24 @@ async function buildEtfSnapshot(
   const holdersHistoryDeduplicated =
     holderReports.length < rawHolderReports.length ||
     previous?.source.holdersHistoryDeduplicated === true
-  const scaleHistory =
+  const periodicScaleHistory =
     scaleHistoryFetched.length > 0
       ? scaleHistoryFetched
-      : previous?.scaleHistory ?? []
+      : (previous?.scaleHistory ?? []).filter(
+          (point) => point.frequency !== 'daily',
+        )
   const navHistory =
     navHistoryFetched.length > 0
       ? navHistoryFetched
       : previous?.navHistory ?? []
+  const scaleHistory = mergeScaleHistory(
+    periodicScaleHistory,
+    officialDailyShares,
+    navHistory,
+  )
 
   console.log(
-    `  holders=${holderReports.length}${holdersFromCache ? ' (cache)' : ''} scale=${scaleHistory.length} nav=${navHistory.length}`,
+    `  holders=${holderReports.length}${holdersFromCache ? ' (cache)' : ''} scale=${scaleHistory.length} daily=${officialDailyShares.length} nav=${navHistory.length}`,
   )
 
   const disclosedHuijinHistory = buildHuijinHistory(holderReports, navHistory)
@@ -831,10 +1074,7 @@ async function buildEtfSnapshot(
     holderReports,
     navHistory,
   )
-  const huijinHistory = buildHuijinTrend(
-    disclosedHuijinHistory,
-    huijinEstimateHistory,
-  )
+  const huijinHistory = disclosedHuijinHistory
   const latestHuijin =
     disclosedHuijinHistory.length > 0
       ? disclosedHuijinHistory[disclosedHuijinHistory.length - 1]
@@ -857,10 +1097,11 @@ async function buildEtfSnapshot(
     source: {
       holders:
         '新浪财经 FundPageInfoService.tabsdcyr（基金年报/半年报十大持有人）',
-      scale: '天天基金 FundArchivesDatas type=gmbd（规模变动）',
+      scale:
+        '上交所/深交所 ETF 规模（每日总份额）+ 天天基金 FundArchivesDatas type=gmbd（定期净资产）',
       quote: '东方财富 push2 / push2delay clist 完整分页（按 ETF 总市值选取）',
       huijinEstimate:
-        '同日使用十大持有人披露；披露期之间按份额插值，超出规模约束时按最近披露汇金占比 × 本期总份额，再乘规模期单位净值估算；非实时持仓',
+        '仅在十大持有人报告期展示汇金披露份额、占比及按报告日附近净值计算的估值；非披露日不推算当前持仓',
       holdersFromCache,
       holdersHistoryDeduplicated,
       holdersFetchedAt: holdersFromCache
@@ -898,12 +1139,20 @@ async function main() {
     )
   }
 
+  console.log('抓取交易所 ETF 每日总份额…')
+  const officialShareHistories = await fetchOfficialShareHistories(
+    picked,
+    previous,
+    marketActiveCapHistory.map((point) => point.date),
+  )
+
   const etfs: EtfSnapshot[] = []
   for (const p of picked) {
     try {
       const snap = await buildEtfSnapshot(
         p.category,
         p.quote,
+        officialShareHistories.get(p.quote.code) ?? [],
         previous?.etfs.find((e) => e.code === p.quote.code),
       )
       etfs.push(snap)
@@ -916,9 +1165,8 @@ async function main() {
   let totalMv: number | null = 0
   let latestReport: string | null = null
   for (const e of etfs) {
-    const latestEstimate = e.huijinEstimateHistory.at(-1)
-    if (latestEstimate?.huijinValueYi != null && totalMv != null) {
-      totalMv += latestEstimate.huijinValueYi * 1e8
+    if (e.latestHuijin?.marketValue != null && totalMv != null) {
+      totalMv += e.latestHuijin.marketValue
     }
     if (
       e.latestHuijin &&
@@ -958,7 +1206,7 @@ async function main() {
   )
   console.log(`\n✓ 已写入 ${OUT_FILE}`)
   console.log(
-    `  最新规模期汇金估算合计市值: ${totalMv != null ? (totalMv / 1e8).toFixed(2) + ' 亿元' : 'N/A'}`,
+    `  最近披露汇金合计估值: ${totalMv != null ? (totalMv / 1e8).toFixed(2) + ' 亿元' : 'N/A'}`,
   )
 }
 

@@ -18,9 +18,6 @@ const axisStyle = {
   splitLine: { lineStyle: { color: 'rgba(148,163,184,0.08)' } },
 }
 
-const hasEstimatedPoints = computed(() =>
-  props.etfs.some((etf) => etf.huijinHistory.some((point) => point.isEstimated)),
-)
 const hasVerifiedPoint = computed(() =>
   props.etfs.some((etf) => etf.huijinHistory.length > 0),
 )
@@ -47,22 +44,12 @@ const option = computed<EChartsCoreOption>(() => {
               ? h.marketValue / 1e8
               : null
       if (value == null) return null
-      return h.isEstimated
-        ? {
-            value,
-            isEstimated: true,
-            itemStyle: {
-              color: palette[i % palette.length],
-              borderColor: '#f0b429',
-              borderWidth: 2,
-            },
-          }
-        : value
+      return value
     })
     return {
-      name: `${e.categoryName}${e.huijinHistory.some((h) => h.isEstimated) ? ' · 含估算' : ''}`,
+      name: e.categoryName,
       type: 'line' as const,
-      smooth: true,
+      smooth: false,
       showSymbol: true,
       symbolSize: 7,
       lineStyle: { width: 2.2 },
@@ -76,7 +63,7 @@ const option = computed<EChartsCoreOption>(() => {
       ? '占比 %'
       : props.metric === 'shares'
         ? '份额（亿份）'
-        : '估算市值（亿元）'
+        : '披露估值（亿元）'
 
   return {
     backgroundColor: 'transparent',
@@ -110,10 +97,10 @@ const option = computed<EChartsCoreOption>(() => {
 </script>
 
 <template>
-  <p v-if="hasEstimatedPoints" class="chart-note">
-    实心点为同日披露；金色描边点按相邻披露插值或最近披露锚点估算，不代表实时持仓。
+  <p v-if="hasVerifiedPoint" class="chart-note">
+    仅展示基金年报/半年报十大持有人报告期；报告期之后不按 ETF 总份额外推汇金当前持仓。
   </p>
-  <p v-else-if="!hasVerifiedPoint" class="chart-note">
+  <p v-else class="chart-note">
     当前没有可验证的汇金持仓披露，暂不绘制持仓趋势。
   </p>
   <BaseChart :option="option" height="360px" />

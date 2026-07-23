@@ -5,7 +5,6 @@ const dashboards = await Promise.all(paths.map((path) => Bun.file(path).json() a
 const data = dashboards[0]
 const errors: string[] = []
 const warnings: string[] = []
-let unavailableEstimateCount = 0
 
 const finite = (value: unknown) => typeof value === 'number' && Number.isFinite(value)
 const unique = <T>(values: T[]) => new Set(values).size === values.length
@@ -38,6 +37,7 @@ function auditPositions(code: string, positions: HuijinPosition[]) {
   if (!unique(dates)) errors.push(`${code}: duplicate Huijin history dates`)
   if (!sorted(dates)) errors.push(`${code}: Huijin history dates not strictly sorted`)
   for (const position of positions) {
+    if (position.isEstimated) errors.push(`${code} ${position.reportDate}: estimated position leaked into disclosed history`)
     const shares = position.entities.reduce((sum, entity) => sum + entity.shares, 0)
     const percent = position.entities.reduce((sum, entity) => sum + entity.percent, 0)
     if (Math.abs(shares - position.shares) > 1) errors.push(`${code} ${position.reportDate}: position share sum mismatch`)
@@ -55,18 +55,44 @@ for (const etf of data.etfs) {
     if (![point.totalSharesYi, point.netAssetYi].every((value) => finite(value) && value >= 0)) errors.push(`${etf.code} ${point.date}: invalid scale value`)
     if (point.purchaseYi != null && (!finite(point.purchaseYi) || point.purchaseYi < 0)) errors.push(`${etf.code} ${point.date}: invalid purchase value`)
     if (point.redeemYi != null && (!finite(point.redeemYi) || point.redeemYi < 0)) errors.push(`${etf.code} ${point.date}: invalid redeem value`)
+    if (point.netSubscriptionYi != null && !finite(point.netSubscriptionYi)) errors.push(`${etf.code} ${point.date}: invalid net share change`)
+    if (point.frequency === 'daily' && point.shareSource !== 'sse' && point.shareSource !== 'szse') errors.push(`${etf.code} ${point.date}: daily share point lacks official source`)
+  }
+  const dailyScale = etf.scaleHistory.filter((point) => point.frequency === 'daily')
+  if (!dailyScale.length) warnings.push(`${etf.code}: no official daily share history`)
+  for (let index = 1; index < dailyScale.length; index++) {
+    const current = dailyScale[index]
+    const prior = dailyScale[index - 1]
+    if (!current || !prior) continue
+    const expected = Number((current.totalSharesYi - prior.totalSharesYi).toFixed(6))
+    if (current.netSubscriptionYi == null || Math.abs(current.netSubscriptionYi - expected) > 0.000001) {
+      errors.push(`${etf.code} ${current.date}: daily net share change mismatch`)
+      break
+    }
   }
   const navDates = etf.navHistory.map((point) => point.date)
   if (!unique(navDates) || !sorted(navDates)) errors.push(`${etf.code}: invalid NAV date ordering`)
   if (etf.navHistory.some((point) => !finite(point.nav) || point.nav <= 0 || !finite(point.accNav) || point.accNav <= 0)) errors.push(`${etf.code}: invalid NAV values`)
   auditReports(etf.code, etf.holderReports)
   auditPositions(etf.code, etf.huijinHistory)
+  const disclosedByDate = new Map(
+    etf.holderReports
+      .filter((report) => report.huijinShares > 0)
+      .map((report) => [report.reportDate, report]),
+  )
+  const disclosedDates = [...disclosedByDate.keys()].sort()
+  const trendDates = etf.huijinHistory.map((position) => position.reportDate)
+  if (JSON.stringify(trendDates) !== JSON.stringify(disclosedDates)) errors.push(`${etf.code}: Huijin trend does not exactly match disclosure dates`)
+  if ((etf.latestHuijin?.reportDate ?? null) !== (disclosedDates.at(-1) ?? null)) errors.push(`${etf.code}: latest Huijin disclosure mismatch`)
   for (const point of etf.huijinEstimateHistory) {
     if (point.totalSharesYi < 0 || point.netAssetYi < 0) errors.push(`${etf.code} ${point.date}: invalid estimate scale`)
-    if (point.huijinShares != null && point.huijinShares > point.totalSharesYi * 1e8 + 1) {
-      if (point.unavailableReason) unavailableEstimateCount += 1
-      else errors.push(`${etf.code} ${point.date}: Huijin shares exceed total shares without unavailable reason`)
-    }
+    if (point.isEstimated) errors.push(`${etf.code} ${point.date}: model-generated Huijin point is not allowed`)
+    const report = disclosedByDate.get(point.date)
+    if (report && point.estimateMethod !== 'disclosed') errors.push(`${etf.code} ${point.date}: disclosure date not marked disclosed`)
+    if (report && (point.huijinShares == null || Math.abs(point.huijinShares - report.huijinShares) > 1)) errors.push(`${etf.code} ${point.date}: aligned disclosed shares mismatch`)
+    if (report && (point.huijinPct == null || Math.abs(point.huijinPct - report.huijinPercent) > 0.02)) errors.push(`${etf.code} ${point.date}: aligned disclosed percentage mismatch`)
+    if (!report && (point.huijinShares != null || point.huijinPct != null || point.huijinValueYi != null)) errors.push(`${etf.code} ${point.date}: non-disclosure date contains Huijin holdings`)
+    if (!report && point.estimateMethod !== 'unavailable') errors.push(`${etf.code} ${point.date}: non-disclosure date not marked unavailable`)
     if (point.huijinPct != null && (point.huijinPct < 0 || point.huijinPct > 100)) errors.push(`${etf.code} ${point.date}: Huijin percentage outside 0-100`)
   }
   if (etf.holderReports.length === 0) warnings.push(`${etf.code}: no holder reports`)
@@ -85,12 +111,11 @@ for (let index = 4; index < market.length; index++) {
 }
 const suspiciousAmounts = market.filter((point) => point.marketAmountYi === 10000)
 if (suspiciousAmounts.length) warnings.push(`${suspiciousAmounts.length} market amount values equal exactly 10000`)
-if (unavailableEstimateCount) warnings.push(`${unavailableEstimateCount} estimate points intentionally unavailable because disclosed shares exceed total shares`)
 if (data.summary.etfCount !== data.etfs.length) errors.push('summary ETF count mismatch')
 if (data.summary.latestActiveCapDate !== market.at(-1)?.date) errors.push('summary latest market date mismatch')
 if (data.summary.latestActiveCapYi !== market.at(-1)?.activeCapYi) errors.push('summary latest active cap mismatch')
 const totalHuijinMarketValue = data.etfs.reduce(
-  (sum, etf) => sum + (etf.huijinEstimateHistory.at(-1)?.huijinValueYi ?? 0) * 1e8,
+  (sum, etf) => sum + (etf.latestHuijin?.marketValue ?? 0),
   0,
 )
 if (Math.abs(totalHuijinMarketValue - (data.summary.totalHuijinMarketValue ?? 0)) > 0.01) errors.push('summary Huijin market value mismatch')
@@ -178,9 +203,10 @@ console.log(JSON.stringify({
     code: etf.code,
     quote: etf.quote?.price ?? null,
     scales: etf.scaleHistory.length,
+    dailyScales: etf.scaleHistory.filter((point) => point.frequency === 'daily').length,
     navs: etf.navHistory.length,
     reports: etf.holderReports.length,
-    estimates: etf.huijinEstimateHistory.length,
+    alignedScales: etf.huijinEstimateHistory.length,
   })),
   market: { points: market.length, first: market[0], latest: market.at(-1) },
   errors,

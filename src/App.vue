@@ -55,7 +55,6 @@ function snapshotDate() {
 function downloadEtfCsv() {
   const rows = etfs.value.map((etf) => {
     const scale = etf.scaleHistory.at(-1)
-    const estimate = etf.huijinEstimateHistory.at(-1)
     return [
       etf.categoryName,
       etf.code,
@@ -64,9 +63,10 @@ function downloadEtfCsv() {
       etf.quote?.changePct,
       scale?.date,
       scale?.totalSharesYi,
-      scale?.purchaseYi != null && scale.redeemYi != null
-        ? scale.purchaseYi - scale.redeemYi
-        : null,
+      scale?.netSubscriptionYi ??
+        (scale?.purchaseYi != null && scale.redeemYi != null
+          ? scale.purchaseYi - scale.redeemYi
+          : null),
       scale?.netAssetYi,
       etf.latestHuijin?.reportDate,
       etf.latestHuijin?.shares,
@@ -74,9 +74,7 @@ function downloadEtfCsv() {
       etf.latestHuijin?.marketValue != null
         ? etf.latestHuijin.marketValue / 1e8
         : null,
-      estimate?.huijinValueYi,
-      estimate?.estimateMethod ?? '',
-      estimate?.unavailableReason ?? '',
+      etf.latestHuijin ? '非报告期不推算，待新披露' : '暂无汇金持仓披露',
     ]
   })
   downloadCsv(
@@ -87,17 +85,15 @@ function downloadEtfCsv() {
       '名称',
       '现价',
       '涨跌幅%',
-      '规模期',
+      '份额日期',
       '总份额_亿份',
-      '期间净申赎_亿份',
+      '净份额变化_亿份',
       '净资产_亿元',
       '汇金报告期',
       '汇金份额',
       '汇金占比%',
-      '披露期汇金估值_亿元',
-      '最新规模期汇金估算市值_亿元',
-      '估算方法',
-      '估算状态',
+      '最近披露汇金估值_亿元',
+      '当前持仓状态',
     ],
     rows,
   )
@@ -225,7 +221,7 @@ onMounted(reload)
             <div>
               <h2>汇金持仓趋势</h2>
               <p class="muted">
-                基于基金年报/半年报「十大持有人」公开披露，重复历史响应不作为独立时间点
+                仅展示基金年报/半年报「十大持有人」公开披露，不使用 ETF 总份额外推当前持仓
               </p>
             </div>
             <div class="seg">
@@ -245,7 +241,7 @@ onMounted(reload)
                 :class="{ on: metric === 'value' }"
                 @click="metric = 'value'"
               >
-                估算市值
+                披露估值
               </button>
             </div>
           </div>
@@ -276,7 +272,7 @@ onMounted(reload)
             <div>
               <h2>ETF 份额变化趋势</h2>
               <p class="muted">
-                总份额、期间净申赎来自基金规模变动披露；单只模式叠加汇金估算份额
+                总份额来自交易所官方日频规模，净变化为相邻交易日份额差；单只模式仅标记汇金披露份额
               </p>
             </div>
             <div class="seg">
@@ -325,10 +321,10 @@ onMounted(reload)
 
         <footer class="foot muted">
           <p>
-            数据来源：新浪财经十大持有人、天天基金规模变动/持有人结构、东方财富
-            ETF 行情及中证全指日线。0AMV 按公开近似公式计算，定义参见
+            数据来源：上交所/深交所 ETF 每日总份额、新浪财经十大持有人、天天基金定期规模、东方财富
+            ETF 行情/净值及中证全指日线。0AMV 按公开近似公式计算，定义参见
             <a href="https://www.compass.cn/shownews.php?nid=33751625" target="_blank" rel="noopener noreferrer">指南针说明</a>；
-            汇金持仓通常于年报/半年报披露，非实时，估算市值 = 披露或估算份额 × 对应日期附近单位净值。
+            汇金持仓通常于年报/半年报披露，非实时；非报告期不根据 ETF 总份额推算汇金当前持仓。
           </p>
           <p>仅供研究展示，不构成投资建议。请以交易所与基金正式公告为准。</p>
         </footer>

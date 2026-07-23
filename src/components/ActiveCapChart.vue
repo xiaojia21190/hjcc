@@ -204,7 +204,7 @@ const option = computed<EChartsCoreOption>(() => {
       </div>
     </div>
     <p v-if="events.length" class="chart-note">
-      金色虚线为汇金持有人报告期，估算规模期不会作为事件标记；报告期不等同于公告发布日期。
+      金色虚线仅标记汇金持有人报告期；报告期不等同于公告发布日期。
     </p>
     <BaseChart :option="option" height="420px" />
   </template>
