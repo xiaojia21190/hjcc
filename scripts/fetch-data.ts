@@ -36,6 +36,9 @@ const OUT_FILE = join(DATA_DIR, 'dashboard.json')
 
 const OFFICIAL_SHARE_OVERLAP_TRADING_DAYS = 5
 
+/** 日频份额回填起点 */
+const SHARE_BACKFILL_START = '2024-01-01'
+
 async function loadPreviousDashboard(): Promise<DashboardData | null> {
   const candidates = [
     OUT_FILE,
@@ -80,19 +83,6 @@ export function officialPointsFromSnapshot(
     .sort((a, b) => a.date.localeCompare(b.date))
 }
 
-function fallbackWeekdays(): string[] {
-  const dates: string[] = []
-  const cursor = new Date()
-  for (let offset = 0; offset < 420; offset++) {
-    const day = new Date(cursor)
-    day.setUTCDate(day.getUTCDate() - offset)
-    if (day.getUTCDay() !== 0 && day.getUTCDay() !== 6) {
-      dates.push(day.toISOString().slice(0, 10))
-    }
-  }
-  return dates.reverse()
-}
-
 async function fetchOfficialShareHistories(
   picks: Array<{ quote: EtfQuote }>,
   previous: DashboardData | null,
@@ -127,8 +117,19 @@ async function fetchOfficialShareHistories(
         marketDates,
         latestHuijinReportDate,
         overlap: OFFICIAL_SHARE_OVERLAP_TRADING_DAYS,
+        backfillStart: SHARE_BACKFILL_START,
       }),
     )
+  }
+
+  // 合并上次缺口日期（优先补抓）
+  for (const { quote } of picks) {
+    const prevGaps = previous?.etfs.find((e) => e.code === quote.code)?.source.shareFetchGaps
+    if (prevGaps?.sseFailedDates?.length && quote.market === 'SH') {
+      const dates = fetchDatesByCode.get(quote.code) ?? []
+      const merged = [...new Set([...prevGaps.sseFailedDates, ...dates])].sort()
+      fetchDatesByCode.set(quote.code, merged)
+    }
   }
 
   const shCodes = picks
@@ -168,6 +169,19 @@ async function fetchOfficialShareHistories(
       quote.code,
       mergeOfficialPoints(histories.get(quote.code) ?? [], fetched),
     )
+
+    // 补抓上次 SZSE 失败区间
+    const prevGaps = previous?.etfs.find((e) => e.code === quote.code)?.source.shareFetchGaps
+    if (prevGaps?.szseFailedRanges?.length) {
+      for (const range of prevGaps.szseFailedRanges) {
+        const [start, end] = range.split('..').map((s) => s?.replace(/ p\d+$/, ''))
+        if (start && end) {
+          const { points: gapPoints } = await fetchSzseDailyShares(quote.code, start, end)
+          histories.set(quote.code, mergeOfficialPoints(histories.get(quote.code) ?? [], gapPoints))
+        }
+      }
+    }
+
     if (failedRanges.length)
       gaps.set(quote.code, { szseFailedRanges: failedRanges })
     console.log(`深交所 ETF 日份额：${quote.code} 共 ${histories.get(quote.code)?.length ?? 0} 条，失败 ${failedRanges.length} 段`)
@@ -255,7 +269,7 @@ async function buildEtfSnapshot(
         '上交所/深交所 ETF 规模（每日总份额）+ 天天基金 FundArchivesDatas type=gmbd（定期净资产）',
       quote: '东方财富 push2 / push2delay clist 完整分页（按 ETF 总市值选取）',
       huijinEstimate:
-        '披露日展示正式披露份额与估值；最后披露期之后按份额锚定法估算（假设汇金不主动赎回，估算份额 = min(披露份额, 当日总份额)，总份额低于披露份额时触发 clamp 并标记可靠性下降）',
+        '占比区间口径：下界从最近披露汇金份额起逐日累加交易所总份额净变化（份额变动全归因汇金）；上界维持最近披露汇金占比不变（被动等比例稀释）；展示值取区间加权（下界 2/3 + 上界 1/3）。趋势信号（份额流向、连续天数、5 日变化率）供方向参考。估算不代表汇金实际持仓。',
       holdersFromCache,
       holdersHistoryDeduplicated,
       holdersFetchedAt: holdersFromCache
