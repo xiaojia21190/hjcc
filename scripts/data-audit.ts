@@ -97,28 +97,88 @@ for (const etf of data.etfs) {
       if (point.isEstimated) errors.push(`${etf.code} ${point.date}: disclosed point must not be marked estimated`)
       if (point.huijinShares == null || Math.abs(point.huijinShares - report.huijinShares) > 1) errors.push(`${etf.code} ${point.date}: aligned disclosed shares mismatch`)
       if (point.huijinPct == null || Math.abs(point.huijinPct - report.huijinPercent) > 0.02) errors.push(`${etf.code} ${point.date}: aligned disclosed percentage mismatch`)
+      if (point.shareTrend != null || point.consecutiveDays != null || point.huijinSharesFloor != null) {
+        errors.push(`${etf.code} ${point.date}: disclosed point must not carry trend signals or range`)
+      }
     } else if (point.estimateMethod === 'anchored') {
       if (!point.isEstimated) errors.push(`${etf.code} ${point.date}: anchored point must be marked estimated`)
       if (!latestAnchorDate || point.date <= latestAnchorDate) errors.push(`${etf.code} ${point.date}: anchored point not after latest disclosure`)
       if (point.huijinShares == null || !finite(point.huijinShares) || point.huijinShares < 0) errors.push(`${etf.code} ${point.date}: anchored point has invalid shares`)
-      else {
-        const totalShares = point.totalSharesYi * 1e8
-        if (point.huijinShares > totalShares + 1) errors.push(`${etf.code} ${point.date}: anchored shares exceed total shares (clamp violated)`)
-        if (latestAnchorShares != null) {
-          const expected = Math.round(Math.min(latestAnchorShares, totalShares))
-          if (Math.abs(point.huijinShares - expected) > 1) errors.push(`${etf.code} ${point.date}: anchored shares mismatch min(anchor, total)`)
+      // 区间校验
+      if (point.huijinSharesFloor == null || !finite(point.huijinSharesFloor) || point.huijinSharesFloor < 0) {
+        errors.push(`${etf.code} ${point.date}: anchored point missing valid huijinSharesFloor`)
+      }
+      if (point.huijinSharesCeil == null || !finite(point.huijinSharesCeil) || point.huijinSharesCeil < 0) {
+        errors.push(`${etf.code} ${point.date}: anchored point missing valid huijinSharesCeil`)
+      }
+      if (point.huijinSharesFloor != null && point.huijinSharesCeil != null) {
+        if (point.huijinSharesFloor > point.huijinSharesCeil + 0.000001) {
+          errors.push(`${etf.code} ${point.date}: floor exceeds ceil`)
         }
-        const expectClamp = latestAnchorShares != null && totalShares < latestAnchorShares
-        if ((point.clampTriggered ?? false) !== expectClamp) errors.push(`${etf.code} ${point.date}: clampTriggered flag mismatch`)
+        if (point.huijinSharesCeil > point.totalSharesYi + 0.000001) {
+          errors.push(`${etf.code} ${point.date}: ceil exceeds total shares`)
+        }
+        // 展示值落在区间内（份 → 亿份转换后比较）
+        if (point.huijinShares != null) {
+          const sharesYi = point.huijinShares / 1e8
+          if (sharesYi < point.huijinSharesFloor - 0.000002 || sharesYi > point.huijinSharesCeil + 0.000002) {
+            errors.push(`${etf.code} ${point.date}: display shares outside [floor, ceil]`)
+          }
+        }
+      }
+      // huijinPct 反推一致性
+      if (point.huijinShares != null && point.huijinPct != null && point.totalSharesYi > 0) {
+        const expectedPct = (point.huijinShares / 1e8 / point.totalSharesYi) * 100
+        if (Math.abs(expectedPct - point.huijinPct) > 0.02) {
+          errors.push(`${etf.code} ${point.date}: huijinPct inconsistent with shares/total`)
+        }
       }
       if (point.huijinValueYi != null && (!finite(point.huijinValueYi) || point.huijinValueYi < 0)) errors.push(`${etf.code} ${point.date}: invalid anchored value`)
+      // 趋势信号校验
+      if (point.shareTrend != null && !['inflow', 'outflow', 'flat'].includes(point.shareTrend)) {
+        errors.push(`${etf.code} ${point.date}: invalid shareTrend`)
+      }
+      if (point.consecutiveDays != null && (!finite(point.consecutiveDays) || point.consecutiveDays < 1)) {
+        errors.push(`${etf.code} ${point.date}: invalid consecutiveDays`)
+      }
+      if (point.shareChangePct5d != null && !finite(point.shareChangePct5d)) {
+        errors.push(`${etf.code} ${point.date}: invalid shareChangePct5d`)
+      }
+      // clamp 字段不应存在
+      if ('clampTriggered' in point || 'clampReliability' in point) {
+        errors.push(`${etf.code} ${point.date}: legacy clamp field present on anchored point`)
+      }
     } else {
       if (point.estimateMethod !== 'unavailable') errors.push(`${etf.code} ${point.date}: unexpected estimate method`)
       if (point.isEstimated) errors.push(`${etf.code} ${point.date}: unavailable point must not be marked estimated`)
       if (point.huijinShares != null || point.huijinPct != null || point.huijinValueYi != null) errors.push(`${etf.code} ${point.date}: unavailable point contains Huijin holdings`)
+      if (point.shareTrend != null || point.consecutiveDays != null || point.huijinSharesFloor != null) {
+        errors.push(`${etf.code} ${point.date}: unavailable point must not carry trend signals or range`)
+      }
+    }
+  }
+  // floor 累加一致性抽样校验（亿份单位）
+  const anchoredPoints = etf.huijinEstimateHistory.filter((point) => point.estimateMethod === 'anchored')
+  if (anchoredPoints.length > 0 && latestAnchorShares != null) {
+    let expectedFloor = latestAnchorShares / 1e8
+    for (const point of anchoredPoints) {
+      const dailyPoint = etf.scaleHistory.find((scalePoint) => scalePoint.date === point.date && scalePoint.frequency === 'daily')
+      const netSub = dailyPoint?.netSubscriptionYi ?? 0
+      expectedFloor = Math.max(0, Math.min(expectedFloor + netSub, point.totalSharesYi))
+      if (point.huijinSharesFloor != null && Math.abs(point.huijinSharesFloor - expectedFloor) > 0.000002) {
+        errors.push(`${etf.code} ${point.date}: floor accumulation mismatch (expected ${expectedFloor.toFixed(6)}, got ${point.huijinSharesFloor})`)
+        break
+      }
     }
   }
   if (etf.holderReports.length === 0) warnings.push(`${etf.code}: no holder reports`)
+  if (etf.source.shareFetchGaps) {
+    const g = etf.source.shareFetchGaps
+    const parts: string[] = []
+    if (g.sseFailedDates?.length) parts.push(`SSE 失败 ${g.sseFailedDates.length} 日`)
+    if (g.szseFailedRanges?.length) parts.push(`SZSE 失败 ${g.szseFailedRanges.length} 段`)
+    if (parts.length) warnings.push(`${etf.code}: 份额抓取缺口 — ${parts.join('，')}`)
+  }
 }
 
 const market = data.marketActiveCapHistory
