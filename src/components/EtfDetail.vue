@@ -135,7 +135,6 @@ const pieOption = computed<EChartsCoreOption>(() => {
           <div class="v mono">
             <template v-if="latestAnchored">
               ≈ {{ formatYi(latestAnchored.huijinValueYi) }}
-              <span v-if="latestAnchored.clampTriggered" class="estimate-tag warn">⚠ clamp</span>
             </template>
             <template v-else>待新披露</template>
           </div>
@@ -149,7 +148,7 @@ const pieOption = computed<EChartsCoreOption>(() => {
         <div class="estimate-note">
           {{
             latestAnchored
-              ? `份额锚定估算（${latestAnchored.date}）：假设汇金不主动赎回，估算份额 = min(披露份额, 当日总份额)${latestAnchored.clampTriggered ? "；总份额已低于披露汇金份额，估算取总份额上限，可靠性下降" : ""}`
+              ? `占比区间估算（${latestAnchored.date}）：下界假设份额变动全归因汇金，上界假设汇金占比不变，展示值取区间加权（下界 2/3 + 上界 1/3）`
               : "ETF 总份额变化不能识别持有人，无汇金披露锚点时不推算持仓"
           }}
         </div>

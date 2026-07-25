@@ -83,7 +83,7 @@ function downloadEtfCsv() {
         ? latestAnchored.huijinShares / 1e8
         : null,
       latestAnchored?.huijinValueYi ?? null,
-      latestAnchored ? (latestAnchored.clampTriggered ? '估算(clamp)' : '估算') : '无锚点',
+      latestAnchored ? '估算' : '无锚点',
     ]
   })
   downloadCsv(

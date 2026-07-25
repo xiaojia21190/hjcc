@@ -38,7 +38,6 @@ const cards = computed(() => {
     0,
   )
   const estDate = latestAnchored.length > 0 ? latestAnchored[0].date : null
-  const clampedCount = latestAnchored.filter((p) => p.clampTriggered).length
   return [
     {
       label: '汇金最近披露合计估值',
@@ -52,7 +51,7 @@ const cards = computed(() => {
       label: '汇金估算合计持仓',
       value: latestAnchored.length > 0 ? formatYi(estTotalYi) : '—',
       sub: estDate
-        ? `估算日 ${estDate} · 份额锚定法${clampedCount > 0 ? ` · ${clampedCount} 只触发 clamp ⚠` : ''}`
+        ? `估算日 ${estDate} · 占比区间估算`
         : '无估算锚点',
       accent: 'orange',
     },

@@ -29,11 +29,6 @@ const items = computed(() => {
   const anchoredEtfs = etfs.filter((etf) =>
     etf.huijinEstimateHistory.some((p) => p.estimateMethod === 'anchored'),
   )
-  const clampedEtfs = etfs.filter((etf) =>
-    etf.huijinEstimateHistory.some(
-      (p) => p.estimateMethod === 'anchored' && p.clampTriggered,
-    ),
-  )
 
   return [
     {
@@ -66,18 +61,14 @@ const items = computed(() => {
       label: '持仓估算',
       status:
         anchoredEtfs.length > 0
-          ? clampedEtfs.length > 0
-            ? '估算中 · 部分 clamp'
-            : '估算中'
+          ? '估算中'
           : '未启用',
       detail:
         anchoredEtfs.length > 0
-          ? `份额锚定法 ${anchoredEtfs.length}/${total} 只${clampedEtfs.length > 0 ? ` · ${clampedEtfs.length} 只总份额低于披露汇金份额` : ''}`
+          ? `占比区间 ${anchoredEtfs.length}/${total} 只`
           : '无汇金披露锚点，不生成估算',
       tone: (anchoredEtfs.length > 0
-        ? clampedEtfs.length > 0
-          ? 'partial'
-          : 'ok'
+        ? 'ok'
         : 'warn') as QualityTone,
     },
   ]

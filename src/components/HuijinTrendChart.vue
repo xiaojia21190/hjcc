@@ -25,7 +25,9 @@ const hasVerifiedPoint = computed(() =>
 interface SeriesItem {
   value: [string, number]
   estimated?: boolean
-  clampTriggered?: boolean
+  shareTrend?: 'inflow' | 'outflow' | 'flat'
+  consecutiveDays?: number
+  shareChangePct5d?: number | null
 }
 
 function disclosedValue(h: HuijinPosition): number | null {
@@ -80,7 +82,9 @@ const option = computed<EChartsCoreOption>(() => {
         return {
           value: [p.date, v],
           estimated: true,
-          clampTriggered: p.clampTriggered ?? false,
+          shareTrend: p.shareTrend,
+          consecutiveDays: p.consecutiveDays,
+          shareChangePct5d: p.shareChangePct5d ?? null,
         } satisfies SeriesItem
       })
       .filter(Boolean) as SeriesItem[]
@@ -92,6 +96,26 @@ const option = computed<EChartsCoreOption>(() => {
       itemStyle: { color },
       data: [...bridge, ...estData],
     })
+    // 份额 5 日变化率次轴曲线
+    const changeData = anchored
+      .map((p) =>
+        p.shareChangePct5d != null
+          ? { value: [p.date, p.shareChangePct5d], itemStyle: { color } }
+          : null,
+      )
+      .filter(Boolean) as { value: [string, number]; itemStyle: { color: string } }[]
+    if (changeData.length) {
+      series.push({
+        name: `${e.categoryName} 份额变化率`,
+        type: 'line',
+        yAxisIndex: 1,
+        showSymbol: false,
+        lineStyle: { width: 1, opacity: 0.5 },
+        itemStyle: { color },
+        data: changeData,
+        tooltip: { show: false },
+      } as Record<string, unknown>)
+    }
   })
 
   const yName =
@@ -126,11 +150,19 @@ const option = computed<EChartsCoreOption>(() => {
           const raw = Array.isArray(p.value) ? p.value[1] : null
           if (raw == null || seen.has(p.seriesName)) continue
           seen.add(p.seriesName)
-          const suffix = p.data?.estimated
-            ? p.data.clampTriggered
-              ? ' · 估算 ⚠ clamp'
-              : ' · 份额锚定估算'
-            : ''
+          let suffix = ''
+          if (p.data?.estimated) {
+            const d = p.data
+            const parts: string[] = ['占比区间估算']
+            if (d.shareTrend && d.shareTrend !== 'flat' && d.consecutiveDays) {
+              const dir = d.shareTrend === 'inflow' ? '净流入' : '净流出'
+              parts.push(`连续${d.consecutiveDays}日${dir}`)
+            }
+            if (d.shareChangePct5d != null) {
+              parts.push(`5日${d.shareChangePct5d > 0 ? '+' : ''}${d.shareChangePct5d}%`)
+            }
+            suffix = ' · ' + parts.join(' / ')
+          }
           html += `<div>${p.marker}${p.seriesName}: ${Number(raw).toFixed(2)}${unit}${suffix}</div>`
         }
         return html
@@ -140,17 +172,26 @@ const option = computed<EChartsCoreOption>(() => {
       top: 0,
       textStyle: { color: '#93a4b8', fontSize: 12 },
     },
-    grid: { left: 52, right: 20, top: 40, bottom: 36 },
+    grid: { left: 52, right: 56, top: 40, bottom: 36 },
     xAxis: {
       type: 'time',
       ...axisStyle,
     },
-    yAxis: {
-      type: 'value',
-      name: yName,
-      nameTextStyle: { color: '#6b7c90', fontSize: 11 },
-      ...axisStyle,
-    },
+    yAxis: [
+      {
+        type: 'value',
+        name: yName,
+        nameTextStyle: { color: '#6b7c90', fontSize: 11 },
+        ...axisStyle,
+      },
+      {
+        type: 'value',
+        name: '5日份额变化率 %',
+        nameTextStyle: { color: '#6b7c90', fontSize: 11 },
+        ...axisStyle,
+        splitLine: { show: false },
+      },
+    ],
     series,
   }
 })
@@ -158,7 +199,7 @@ const option = computed<EChartsCoreOption>(() => {
 
 <template>
   <p v-if="hasVerifiedPoint" class="chart-note">
-    实点为基金年报/半年报「十大持有人」正式披露；最近披露期之后的虚线为份额锚定估算（假设汇金不主动赎回，tooltip 中 ⚠ 表示总份额已低于披露汇金份额）。
+    实点为基金年报/半年报「十大持有人」正式披露；最近披露期之后的虚线为份额锚定估算（假设汇金不主动赎回，tooltip 中 ⚠ 表示总份额已低于披露汇金份额）。次轴细线为近 5 日总份额变化率，用于判断份额流向。
   </p>
   <p v-else class="chart-note">
     当前没有可验证的汇金持仓披露，暂不绘制持仓趋势。

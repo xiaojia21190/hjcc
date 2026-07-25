@@ -59,7 +59,9 @@ const rows = computed(() =>
           : null,
       hasHuijin: !!latestDisclosure,
       estValueYi: latestAnchored?.huijinValueYi ?? null,
-      estClamped: latestAnchored?.clampTriggered ?? false,
+      estShareTrend: latestAnchored?.shareTrend ?? null,
+      estConsecutiveDays: latestAnchored?.consecutiveDays ?? null,
+      estChangePct5d: latestAnchored?.shareChangePct5d ?? null,
     }
   }),
 )
@@ -149,6 +151,7 @@ const visibleRows = computed(() => {
           <th class="num">汇金占比</th>
           <th class="num">最近披露估值</th>
           <th class="num">估算持仓</th>
+          <th class="num">份额趋势</th>
         </tr>
       </thead>
       <tbody>
@@ -188,16 +191,31 @@ const visibleRows = computed(() => {
           <td
             class="num mono"
             :title="
-              r.estClamped
-                ? '总份额已低于披露汇金份额，估算取总份额上限，可靠性下降'
-                : r.estValueYi != null
-                  ? '份额锚定估算：假设汇金不主动赎回'
-                  : undefined
+              r.estValueYi != null
+                ? '占比区间估算：下界份额变动全归因汇金，上界占比不变'
+                : undefined
             "
           >
             {{ r.estValueYi != null ? formatYi(r.estValueYi) : '—' }}
-            <span v-if="r.estClamped" class="estimate-tag warn">⚠ clamp</span>
-            <span v-else-if="r.estValueYi != null" class="estimate-tag">估算</span>
+            <span v-if="r.estValueYi != null" class="estimate-tag">估算</span>
+          </td>
+          <td
+            class="num mono"
+            :title="
+              r.estShareTrend === 'inflow'
+                ? '连续净流入，汇金占比被动稀释减缓'
+                : r.estShareTrend === 'outflow'
+                  ? '连续净流出，汇金占比被动上升'
+                  : r.estChangePct5d != null
+                    ? '份额持平'
+                    : '无估算趋势'
+            "
+          >
+            <template v-if="r.estShareTrend === 'inflow'">↑</template>
+            <template v-else-if="r.estShareTrend === 'outflow'">↓</template>
+            <template v-else>→</template>
+            <span v-if="r.estConsecutiveDays && r.estShareTrend !== 'flat'">{{ r.estConsecutiveDays }}</span>
+            <span v-if="r.estChangePct5d != null" class="muted">{{ r.estChangePct5d > 0 ? '+' : '' }}{{ r.estChangePct5d }}%</span>
           </td>
         </tr>
       </tbody>
