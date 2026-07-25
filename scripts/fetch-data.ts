@@ -15,6 +15,7 @@ import { buildHuijinEstimate } from './lib/estimate'
 import {
   buildHuijinHistory,
   dedupeHolderReports,
+  mergeOfficialPoints,
   mergeScaleHistory,
 } from './lib/merge'
 import {
@@ -77,15 +78,6 @@ export function officialPointsFromSnapshot(
       shareSource: point.shareSource as 'sse' | 'szse',
     }))
     .sort((a, b) => a.date.localeCompare(b.date))
-}
-
-export function mergeOfficialPoints(
-  previous: OfficialDailySharePoint[],
-  fetched: OfficialDailySharePoint[],
-): OfficialDailySharePoint[] {
-  const byDate = new Map(previous.map((point) => [point.date, point]))
-  for (const point of fetched) byDate.set(point.date, point)
-  return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date))
 }
 
 function fallbackWeekdays(): string[] {

@@ -1,4 +1,4 @@
-import { mergeOfficialPoints } from '../fetch-data'
+import { mergeOfficialPoints } from '../lib/merge'
 import { fetchJson, sleep } from './http'
 import type { OfficialDailySharePoint } from './sse'
 

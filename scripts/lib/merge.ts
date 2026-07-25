@@ -6,6 +6,15 @@ import type {
 } from '../../shared/types'
 import type { OfficialDailySharePoint } from '../sources/sse'
 
+export function mergeOfficialPoints(
+  previous: OfficialDailySharePoint[],
+  fetched: OfficialDailySharePoint[],
+): OfficialDailySharePoint[] {
+  const byDate = new Map(previous.map((point) => [point.date, point]))
+  for (const point of fetched) byDate.set(point.date, point)
+  return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date))
+}
+
 export function nearestNav(
   navs: NavPoint[],
   date: string,
