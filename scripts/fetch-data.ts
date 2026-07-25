@@ -18,6 +18,7 @@ import {
   mergeOfficialPoints,
   mergeScaleHistory,
 } from './lib/merge'
+import { formatCompletenessReport } from './lib/report'
 import {
   fetchEtfUniverse,
   fetchMarketActiveCapHistory,
@@ -381,6 +382,8 @@ async function main() {
   console.log(
     `  最近披露汇金合计估值: ${totalMv != null ? (totalMv / 1e8).toFixed(2) + ' 亿元' : 'N/A'}`,
   )
+  console.log('')
+  console.log(formatCompletenessReport(dashboard))
 }
 
 main().catch((e) => {
