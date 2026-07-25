@@ -80,8 +80,10 @@ test('floor 不超过当日总份额', () => {
   ]
   const navs = [navPt('2025-12-31', 1), navPt('2026-01-02', 1)]
   const result = buildHuijinEstimate(scale, [anchorReport(80e8, 80)], navs)
-  // floor = clamp(80 + (-10), 0, 60) = 60（被总份额截断）
-  expect(result[1]!.huijinSharesFloor).toBeCloseTo(60, 4)
+  // rawFloor = clamp(80 + (-10), 0, 60) = 60, ceil = 60 × 80% = 48
+  // 存储时确保区间有序：floor = min(60, 48) = 48, ceil = max(60, 48) = 60
+  expect(result[1]!.huijinSharesFloor).toBeCloseTo(48, 4)
+  expect(result[1]!.huijinSharesCeil).toBeCloseTo(60, 4)
 })
 
 test('无锚点时全部 unavailable', () => {

@@ -76,7 +76,7 @@ export function buildHuijinEstimate(
       // 上界：占比不变
       const ceilYi = (s.totalSharesYi * latestAnchor.huijinPercent) / 100
 
-      // 展示值
+      // 展示值（用原始 floor/ceil 加权，结果自然落在 [min, max] 内）
       const weightedYi = floorYi * FLOOR_WEIGHT + ceilYi * CEIL_WEIGHT
       const huijinShares = Math.round(weightedYi * 1e8)
       const huijinValueYi =
@@ -89,8 +89,9 @@ export function buildHuijinEstimate(
         huijinShares,
         huijinValueYi,
         huijinPct: Number(((weightedYi / s.totalSharesYi) * 100).toFixed(2)),
-        huijinSharesFloor: Number(floorYi.toFixed(6)),
-        huijinSharesCeil: Number(ceilYi.toFixed(6)),
+        // 净申购时 floor 可能超过 ceil，存储时确保区间有序
+        huijinSharesFloor: Number(Math.min(floorYi, ceilYi).toFixed(6)),
+        huijinSharesCeil: Number(Math.max(floorYi, ceilYi).toFixed(6)),
         isEstimated: true,
         estimateMethod: 'anchored' as const,
         netSubscriptionYi: s.netSubscriptionYi ?? null,

@@ -160,13 +160,17 @@ for (const etf of data.etfs) {
   // floor 累加一致性抽样校验（亿份单位）
   const anchoredPoints = etf.huijinEstimateHistory.filter((point) => point.estimateMethod === 'anchored')
   if (anchoredPoints.length > 0 && latestAnchorShares != null) {
-    let expectedFloor = latestAnchorShares / 1e8
+    const anchorPct = disclosedByDate.get(latestAnchorDate!)?.huijinPercent ?? 0
+    let rawFloor = latestAnchorShares / 1e8
     for (const point of anchoredPoints) {
       const dailyPoint = etf.scaleHistory.find((scalePoint) => scalePoint.date === point.date && scalePoint.frequency === 'daily')
       const netSub = dailyPoint?.netSubscriptionYi ?? 0
-      expectedFloor = Math.max(0, Math.min(expectedFloor + netSub, point.totalSharesYi))
-      if (point.huijinSharesFloor != null && Math.abs(point.huijinSharesFloor - expectedFloor) > 0.000002) {
-        errors.push(`${etf.code} ${point.date}: floor accumulation mismatch (expected ${expectedFloor.toFixed(6)}, got ${point.huijinSharesFloor})`)
+      rawFloor = Math.max(0, Math.min(rawFloor + netSub, point.totalSharesYi))
+      const ceil = (point.totalSharesYi * anchorPct) / 100
+      // 存储时确保区间有序：floor = min(rawFloor, ceil)
+      const expectedStoredFloor = Math.min(rawFloor, ceil)
+      if (point.huijinSharesFloor != null && Math.abs(point.huijinSharesFloor - expectedStoredFloor) > 0.000002) {
+        errors.push(`${etf.code} ${point.date}: floor accumulation mismatch (expected ${expectedStoredFloor.toFixed(6)}, got ${point.huijinSharesFloor})`)
         break
       }
     }
