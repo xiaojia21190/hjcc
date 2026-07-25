@@ -64,7 +64,7 @@ const option = computed<EChartsCoreOption>(() => {
         })
         .filter(Boolean),
     })
-    // 份额锚定估算（虚线），从最近披露点桥接
+    // 占比区间估算（虚线），从最近披露点桥接
     const anchored = e.huijinEstimateHistory.filter(
       (p) => p.estimateMethod === 'anchored',
     )
@@ -199,7 +199,7 @@ const option = computed<EChartsCoreOption>(() => {
 
 <template>
   <p v-if="hasVerifiedPoint" class="chart-note">
-    实点为基金年报/半年报「十大持有人」正式披露；最近披露期之后的虚线为份额锚定估算（假设汇金不主动赎回，tooltip 中 ⚠ 表示总份额已低于披露汇金份额）。次轴细线为近 5 日总份额变化率，用于判断份额流向。
+    实点为基金年报/半年报「十大持有人」正式披露；最近披露期之后的虚线为占比区间估算（下界假设份额变动全归因汇金，上界假设汇金占比不变，展示值取区间加权）。次轴细线为近 5 日总份额变化率，用于判断份额流向。
   </p>
   <p v-else class="chart-note">
     当前没有可验证的汇金持仓披露，暂不绘制持仓趋势。
