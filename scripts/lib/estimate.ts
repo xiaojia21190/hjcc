@@ -1,13 +1,18 @@
+/**
+ * 汇金持仓估算 — 占比区间口径。
+ * 下界：份额变动全归因汇金（逐日累加净份额变化）。
+ * 上界：汇金占比不变（被动等比例稀释）。
+ * 展示值：区间加权（偏向下界）。
+ */
+import type { EtfSnapshot, HolderReport, NavPoint, ScalePoint } from '../../shared/types'
 import { computeTrendSignals } from '../../shared/estimate-signals'
-import type {
-  EtfSnapshot,
-  HolderReport,
-  NavPoint,
-  ScalePoint,
-} from '../../shared/types'
 import { nearestNav } from './merge'
 
-export type HuijinEstimate = EtfSnapshot['huijinEstimateHistory'][number]
+type HuijinEstimate = EtfSnapshot['huijinEstimateHistory'][number]
+
+/** 区间加权常量：偏向下界（对齐"大额变动主要是汇金"先验） */
+export const FLOOR_WEIGHT = 2 / 3
+export const CEIL_WEIGHT = 1 / 3
 
 export function buildHuijinEstimate(
   scale: ScalePoint[],
@@ -20,14 +25,16 @@ export function buildHuijinEstimate(
   const disclosedByDate = new Map(
     huijinReports.map((report) => [report.reportDate, report]),
   )
-  // 只取最近一期汇金披露作为份额锚点，不做历史区间回填
   const latestAnchor =
-    huijinReports.length > 0
-      ? huijinReports[huijinReports.length - 1]
-      : null
+    huijinReports.length > 0 ? huijinReports[huijinReports.length - 1] : null
 
   type EstimateWithNet = HuijinEstimate & { netSubscriptionYi: number | null }
-  const raw: EstimateWithNet[] = scale.map((s) => {
+  const raw: EstimateWithNet[] = []
+
+  // floor 累加状态（亿份）；遇到披露日重置
+  let floorYi: number | null = null
+
+  for (const s of scale) {
     const report = disclosedByDate.get(s.date)
     const nav =
       nearestNav(navs, s.date) ??
@@ -36,7 +43,7 @@ export function buildHuijinEstimate(
     if (report) {
       const huijinValueYi =
         nav != null ? (report.huijinShares * nav) / 1e8 : null
-      return {
+      raw.push({
         date: s.date,
         netAssetYi: s.netAssetYi,
         totalSharesYi: s.totalSharesYi,
@@ -47,42 +54,51 @@ export function buildHuijinEstimate(
         isEstimated: false,
         estimateMethod: 'disclosed' as const,
         netSubscriptionYi: s.netSubscriptionYi ?? null,
-      }
+      })
+      // 披露日重置 floor 为披露值
+      floorYi = report.huijinShares / 1e8
+      continue
     }
 
-    // 份额锚定估算：仅在最近一期披露之后生成，假设汇金不主动赎回
     if (
       latestAnchor &&
       s.date > latestAnchor.reportDate &&
       s.frequency === 'daily' &&
       s.totalSharesYi > 0
     ) {
-      const totalShares = s.totalSharesYi * 1e8
-      const clampTriggered = totalShares < latestAnchor.huijinShares
-      const estShares = Math.round(
-        clampTriggered ? totalShares : latestAnchor.huijinShares,
-      )
+      // 初始化 floor（首个 anchored 点之前若未经过披露日）
+      if (floorYi == null) floorYi = latestAnchor.huijinShares / 1e8
+
+      // 累加下界
+      const netSub = s.netSubscriptionYi ?? 0
+      floorYi = Math.max(0, Math.min(floorYi + netSub, s.totalSharesYi))
+
+      // 上界：占比不变
+      const ceilYi = (s.totalSharesYi * latestAnchor.huijinPercent) / 100
+
+      // 展示值
+      const weightedYi = floorYi * FLOOR_WEIGHT + ceilYi * CEIL_WEIGHT
+      const huijinShares = Math.round(weightedYi * 1e8)
       const huijinValueYi =
-        nav != null ? Number(((estShares * nav) / 1e8).toFixed(4)) : null
-      return {
+        nav != null ? Number((weightedYi * nav).toFixed(4)) : null
+
+      raw.push({
         date: s.date,
         netAssetYi: s.netAssetYi,
         totalSharesYi: s.totalSharesYi,
-        huijinShares: estShares,
+        huijinShares,
         huijinValueYi,
-        huijinPct: clampTriggered
-          ? 100
-          : Number(
-              ((latestAnchor.huijinShares / totalShares) * 100).toFixed(2),
-            ),
+        huijinPct: Number(((weightedYi / s.totalSharesYi) * 100).toFixed(2)),
+        huijinSharesFloor: Number(floorYi.toFixed(6)),
+        huijinSharesCeil: Number(ceilYi.toFixed(6)),
         isEstimated: true,
         estimateMethod: 'anchored' as const,
-        clampTriggered,
         netSubscriptionYi: s.netSubscriptionYi ?? null,
-      }
+      })
+      continue
     }
 
-    return {
+    raw.push({
       date: s.date,
       netAssetYi: s.netAssetYi,
       totalSharesYi: s.totalSharesYi,
@@ -97,10 +113,10 @@ export function buildHuijinEstimate(
           ? '最近披露日及之前，仅展示正式披露点'
           : '非日频份额数据点，不推算汇金持仓',
       netSubscriptionYi: s.netSubscriptionYi ?? null,
-    }
-  })
+    })
+  }
 
-  // 对 anchored 点计算趋势信号（输入为 anchored 子序列，按日期升序）
+  // 趋势信号（基于总份额流向，与口径无关）
   const anchoredIdx = raw
     .map((p, i) => (p.estimateMethod === 'anchored' ? i : -1))
     .filter((i) => i >= 0)
@@ -110,7 +126,6 @@ export function buildHuijinEstimate(
         date: raw[i]!.date,
         totalSharesYi: raw[i]!.totalSharesYi,
         netSubscriptionYi: raw[i]!.netSubscriptionYi ?? null,
-        clampTriggered: raw[i]!.clampTriggered,
       })),
     )
     anchoredIdx.forEach((i, k) => {
@@ -120,11 +135,9 @@ export function buildHuijinEstimate(
         shareTrend: sig.shareTrend,
         consecutiveDays: sig.consecutiveDays,
         shareChangePct5d: sig.shareChangePct5d,
-        clampReliability: sig.clampReliability,
       }
     })
   }
 
-  // 移除临时 netSubscriptionYi（HuijinEstimatePoint 不含该字段）
   return raw.map(({ netSubscriptionYi: _omit, ...rest }) => rest)
 }
