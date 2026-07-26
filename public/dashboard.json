@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-07-25T09:35:05.335Z",
+  "updatedAt": "2026-07-26T00:40:45.877Z",
   "categories": [
     {
       "id": "sse50",
@@ -104,8 +104,8 @@
         "name": "上证50ETF华夏",
         "price": 3.05,
         "changePct": -1.1,
-        "marketCap": 23880789082,
-        "floatCap": 23880789082,
+        "marketCap": 23880789081.6,
+        "floatCap": 23880789081.6,
         "market": "SH"
       },
       "isLargest": true,
@@ -26427,23 +26427,23 @@
         "huijinEstimate": "占比区间口径：下界从最近披露汇金份额起逐日累加交易所总份额净变化（份额变动全归因汇金）；上界维持最近披露汇金占比不变（被动等比例稀释）；展示值取区间加权（下界 2/3 + 上界 1/3）。趋势信号（份额流向、连续天数、5 日变化率）供方向参考。估算不代表汇金实际持仓。",
         "holdersFromCache": false,
         "holdersHistoryDeduplicated": true,
-        "holdersFetchedAt": "2026-07-25T09:33:02.772Z",
-        "fetchedAt": "2026-07-25T09:33:02.772Z"
+        "holdersFetchedAt": "2026-07-26T00:38:16.796Z",
+        "fetchedAt": "2026-07-26T00:38:16.796Z"
       }
     },
     {
       "category": "csi300",
       "categoryName": "沪深300",
       "code": "510300",
-      "name": "沪深300ETF华泰柏瑞",
+      "name": "沪深300ETF",
       "market": "SH",
       "quote": {
         "code": "510300",
-        "name": "沪深300ETF华泰柏瑞",
-        "price": 4.701,
-        "changePct": -1.8,
-        "marketCap": 112950398984,
-        "floatCap": 112950398984,
+        "name": "沪深300ETF",
+        "price": null,
+        "changePct": null,
+        "marketCap": 94872000000,
+        "floatCap": null,
         "market": "SH"
       },
       "isLargest": true,
@@ -52325,23 +52325,23 @@
         "huijinEstimate": "占比区间口径：下界从最近披露汇金份额起逐日累加交易所总份额净变化（份额变动全归因汇金）；上界维持最近披露汇金占比不变（被动等比例稀释）；展示值取区间加权（下界 2/3 + 上界 1/3）。趋势信号（份额流向、连续天数、5 日变化率）供方向参考。估算不代表汇金实际持仓。",
         "holdersFromCache": false,
         "holdersHistoryDeduplicated": true,
-        "holdersFetchedAt": "2026-07-25T09:33:27.150Z",
-        "fetchedAt": "2026-07-25T09:33:27.150Z"
+        "holdersFetchedAt": "2026-07-26T00:38:46.472Z",
+        "fetchedAt": "2026-07-26T00:38:46.472Z"
       }
     },
     {
       "category": "csi500",
       "categoryName": "中证500",
       "code": "510500",
-      "name": "中证500ETF南方",
+      "name": "中证500ETF",
       "market": "SH",
       "quote": {
         "code": "510500",
-        "name": "中证500ETF南方",
-        "price": 7.545,
-        "changePct": -2.48,
-        "marketCap": 43261284872,
-        "floatCap": 43261284872,
+        "name": "中证500ETF",
+        "price": null,
+        "changePct": null,
+        "marketCap": 38087000000,
+        "floatCap": null,
         "market": "SH"
       },
       "isLargest": true,
@@ -77969,23 +77969,23 @@
         "huijinEstimate": "占比区间口径：下界从最近披露汇金份额起逐日累加交易所总份额净变化（份额变动全归因汇金）；上界维持最近披露汇金占比不变（被动等比例稀释）；展示值取区间加权（下界 2/3 + 上界 1/3）。趋势信号（份额流向、连续天数、5 日变化率）供方向参考。估算不代表汇金实际持仓。",
         "holdersFromCache": false,
         "holdersHistoryDeduplicated": true,
-        "holdersFetchedAt": "2026-07-25T09:33:51.491Z",
-        "fetchedAt": "2026-07-25T09:33:51.491Z"
+        "holdersFetchedAt": "2026-07-26T00:39:16.150Z",
+        "fetchedAt": "2026-07-26T00:39:16.150Z"
       }
     },
     {
       "category": "csi1000",
       "categoryName": "中证1000",
       "code": "512100",
-      "name": "中证1000ETF南方",
+      "name": "中证1000ETF",
       "market": "SH",
       "quote": {
         "code": "512100",
-        "name": "中证1000ETF南方",
-        "price": 2.832,
-        "changePct": -2.81,
-        "marketCap": 24426616062,
-        "floatCap": 24426616062,
+        "name": "中证1000ETF",
+        "price": null,
+        "changePct": null,
+        "marketCap": 10961000000,
+        "floatCap": null,
         "market": "SH"
       },
       "isLargest": true,
@@ -103251,23 +103251,23 @@
         "huijinEstimate": "占比区间口径：下界从最近披露汇金份额起逐日累加交易所总份额净变化（份额变动全归因汇金）；上界维持最近披露汇金占比不变（被动等比例稀释）；展示值取区间加权（下界 2/3 + 上界 1/3）。趋势信号（份额流向、连续天数、5 日变化率）供方向参考。估算不代表汇金实际持仓。",
         "holdersFromCache": false,
         "holdersHistoryDeduplicated": true,
-        "holdersFetchedAt": "2026-07-25T09:34:16.000Z",
-        "fetchedAt": "2026-07-25T09:34:16.000Z"
+        "holdersFetchedAt": "2026-07-26T00:39:45.761Z",
+        "fetchedAt": "2026-07-26T00:39:45.761Z"
       }
     },
     {
       "category": "chinext",
       "categoryName": "创业板",
       "code": "159915",
-      "name": "创业板ETF易方达",
+      "name": "创业板ETF",
       "market": "SZ",
       "quote": {
         "code": "159915",
-        "name": "创业板ETF易方达",
-        "price": 3.508,
-        "changePct": -2.47,
-        "marketCap": 58301048056,
-        "floatCap": 58301048056,
+        "name": "创业板ETF",
+        "price": null,
+        "changePct": null,
+        "marketCap": 46868000000,
+        "floatCap": null,
         "market": "SZ"
       },
       "isLargest": true,
@@ -129892,8 +129892,8 @@
         "huijinEstimate": "占比区间口径：下界从最近披露汇金份额起逐日累加交易所总份额净变化（份额变动全归因汇金）；上界维持最近披露汇金占比不变（被动等比例稀释）；展示值取区间加权（下界 2/3 + 上界 1/3）。趋势信号（份额流向、连续天数、5 日变化率）供方向参考。估算不代表汇金实际持仓。",
         "holdersFromCache": false,
         "holdersHistoryDeduplicated": true,
-        "holdersFetchedAt": "2026-07-25T09:34:41.196Z",
-        "fetchedAt": "2026-07-25T09:34:41.196Z"
+        "holdersFetchedAt": "2026-07-26T00:40:15.973Z",
+        "fetchedAt": "2026-07-26T00:40:15.973Z"
       }
     },
     {
@@ -152959,8 +152959,8 @@
         "huijinEstimate": "占比区间口径：下界从最近披露汇金份额起逐日累加交易所总份额净变化（份额变动全归因汇金）；上界维持最近披露汇金占比不变（被动等比例稀释）；展示值取区间加权（下界 2/3 + 上界 1/3）。趋势信号（份额流向、连续天数、5 日变化率）供方向参考。估算不代表汇金实际持仓。",
         "holdersFromCache": false,
         "holdersHistoryDeduplicated": true,
-        "holdersFetchedAt": "2026-07-25T09:35:05.033Z",
-        "fetchedAt": "2026-07-25T09:35:05.033Z"
+        "holdersFetchedAt": "2026-07-26T00:40:45.577Z",
+        "fetchedAt": "2026-07-26T00:40:45.577Z"
       }
     }
   ],
