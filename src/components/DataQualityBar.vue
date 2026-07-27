@@ -23,7 +23,14 @@ const items = computed(() => {
       etf.scaleHistory.filter((point) => point.frequency === 'daily').at(-1)?.date,
     )
     .filter((date): date is string => !!date)
-  const latestDailyShareDate = dailyShareDates.sort().at(-1) ?? null
+  const sortedShareDates = [...dailyShareDates].sort()
+  const latestDailyShareDate = sortedShareDates.at(-1) ?? null
+  const earliestDailyShareDate = sortedShareDates[0] ?? null
+  // 个别 ETF（如深交所）官方份额发布滞后时，最新日期会掩盖差异，需如实暴露
+  const shareDateLag =
+    latestDailyShareDate != null &&
+    earliestDailyShareDate != null &&
+    earliestDailyShareDate !== latestDailyShareDate
   const disclosed = etfs.filter((etf) => etf.latestHuijin != null).length
   const cached = etfs.filter((etf) => etf.source.holdersFromCache).length
   const anchoredEtfs = etfs.filter((etf) =>
@@ -48,8 +55,10 @@ const items = computed(() => {
     {
       label: 'ETF 日份额',
       status: dailyShareCovered === total ? '完整' : '部分可用',
-      detail: `${dailyShareCovered}/${total} 只 · 最新 ${latestDailyShareDate ?? '—'}`,
-      tone: (dailyShareCovered === total ? 'ok' : 'partial') as QualityTone,
+      detail: shareDateLag
+        ? `${dailyShareCovered}/${total} 只 · 最新 ${latestDailyShareDate} · 个别滞后至 ${earliestDailyShareDate}`
+        : `${dailyShareCovered}/${total} 只 · 最新 ${latestDailyShareDate ?? '—'}`,
+      tone: (dailyShareCovered === total && !shareDateLag ? 'ok' : 'partial') as QualityTone,
     },
     {
       label: '汇金披露',

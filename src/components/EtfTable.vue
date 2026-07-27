@@ -145,13 +145,13 @@ const visibleRows = computed(() => {
           <th>份额日期</th>
           <th class="num">基金总份额</th>
           <th class="num">净份额变化</th>
+          <th class="num" title="基于交易所总份额流向，供判断汇金方向参考，不代表汇金实际操作">份额趋势</th>
           <th class="num">基金规模</th>
           <th>报告期</th>
           <th class="num">汇金份额</th>
           <th class="num">汇金占比</th>
           <th class="num">最近披露估值</th>
           <th class="num">估算持仓</th>
-          <th class="num">份额趋势</th>
         </tr>
       </thead>
       <tbody>
@@ -178,6 +178,24 @@ const visibleRows = computed(() => {
           <td class="num mono" :class="changeClass(r.shareChangeYi)">
             {{ r.shareChangeYi != null ? `${r.shareChangeYi.toFixed(2)} 亿份` : '—' }}
           </td>
+          <td
+            class="num mono"
+            :title="
+              r.estShareTrend === 'inflow'
+                ? '连续净流入，汇金占比被动稀释减缓'
+                : r.estShareTrend === 'outflow'
+                  ? '连续净流出，汇金占比被动上升'
+                  : r.estChangePct5d != null
+                    ? '份额持平'
+                    : '无估算趋势'
+            "
+          >
+            <template v-if="r.estShareTrend === 'inflow'">↑</template>
+            <template v-else-if="r.estShareTrend === 'outflow'">↓</template>
+            <template v-else>→</template>
+            <span v-if="r.estConsecutiveDays && r.estShareTrend !== 'flat'">{{ r.estConsecutiveDays }}</span>
+            <span v-if="r.estChangePct5d != null" class="muted">{{ r.estChangePct5d > 0 ? '+' : '' }}{{ r.estChangePct5d }}%</span>
+          </td>
           <td class="num mono" :title="r.netAssetEstimated ? '总份额 × 当日附近单位净值估算' : undefined">
             {{ r.netAssetEstimated ? '≈ ' : '' }}{{ formatYi(r.netAssetYi) }}
           </td>
@@ -198,24 +216,6 @@ const visibleRows = computed(() => {
           >
             {{ r.estValueYi != null ? formatYi(r.estValueYi) : '—' }}
             <span v-if="r.estValueYi != null" class="estimate-tag">估算</span>
-          </td>
-          <td
-            class="num mono"
-            :title="
-              r.estShareTrend === 'inflow'
-                ? '连续净流入，汇金占比被动稀释减缓'
-                : r.estShareTrend === 'outflow'
-                  ? '连续净流出，汇金占比被动上升'
-                  : r.estChangePct5d != null
-                    ? '份额持平'
-                    : '无估算趋势'
-            "
-          >
-            <template v-if="r.estShareTrend === 'inflow'">↑</template>
-            <template v-else-if="r.estShareTrend === 'outflow'">↓</template>
-            <template v-else>→</template>
-            <span v-if="r.estConsecutiveDays && r.estShareTrend !== 'flat'">{{ r.estConsecutiveDays }}</span>
-            <span v-if="r.estChangePct5d != null" class="muted">{{ r.estChangePct5d > 0 ? '+' : '' }}{{ r.estChangePct5d }}%</span>
           </td>
         </tr>
       </tbody>

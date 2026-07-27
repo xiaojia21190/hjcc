@@ -217,6 +217,9 @@ tr:focus-visible {
 .summary-card[data-accent='orange']::before {
   background: #fb923c;
 }
+.summary-card[data-accent='red']::before {
+  background: #f07178;
+}
 
 .summary-card .label {
   font-size: 13px;

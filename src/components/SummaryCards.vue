@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import type { EtfSnapshot } from '../../shared/types'
 import { formatPct, formatShares, formatYi, yuanToYi } from '../utils/format'
+import { aggregateShareSignals } from '../utils/signals'
 
 const props = defineProps<{
   etfs: EtfSnapshot[]
@@ -37,7 +38,33 @@ const cards = computed(() => {
     (sum, p) => sum + (p.huijinValueYi ?? 0),
     0,
   )
-  const estDate = latestAnchored.length > 0 ? latestAnchored[0].date : null
+  // 各 ETF 估算末日可能不同（如深交所 ETF 滞后），用日期区间如实标注合计口径
+  const estDates = latestAnchored.map((p) => p.date).sort()
+  const estDateMin = estDates[0] ?? null
+  const estDateMax = estDates[estDates.length - 1] ?? null
+  const estDateLabel =
+    estDateMin == null
+      ? null
+      : estDateMin === estDateMax
+        ? estDateMin
+        : `${estDateMin} ~ ${estDateMax}`
+  // 份额信号聚合：各 ETF 最新 anchored 点的趋势信号
+  const signalPoints = props.etfs
+    .map((etf) => {
+      const pts = etf.huijinEstimateHistory.filter(
+        (p) => p.estimateMethod === 'anchored',
+      )
+      const last = pts.length > 0 ? pts[pts.length - 1] : null
+      if (!last || last.shareTrend == null) return null
+      return {
+        shareTrend: last.shareTrend,
+        consecutiveDays: last.consecutiveDays ?? 1,
+        shareChangePct5d: last.shareChangePct5d ?? null,
+        categoryName: etf.categoryName,
+      }
+    })
+    .filter((p): p is NonNullable<typeof p> => p != null)
+  const signal = aggregateShareSignals(signalPoints)
   return [
     {
       label: '汇金最近披露合计估值',
@@ -48,12 +75,18 @@ const cards = computed(() => {
       accent: 'gold',
     },
     {
-      label: '汇金估算合计持仓',
-      value: latestAnchored.length > 0 ? formatYi(estTotalYi) : '—',
-      sub: estDate
-        ? `估算日 ${estDate} · 占比区间估算`
-        : '无估算锚点',
-      accent: 'orange',
+      label: '份额信号（汇金方向参考）',
+      value: signal.headline,
+      sub:
+        [signal.highlightConsecutive, signal.highlightChange]
+          .filter(Boolean)
+          .join(' · ') || '无汇金披露锚点，暂不生成信号',
+      accent:
+        signal.tone === 'inflow'
+          ? 'teal'
+          : signal.tone === 'outflow'
+            ? 'red'
+            : 'orange',
     },
     {
       label: '0AMV 活筹估算',
@@ -62,6 +95,14 @@ const cards = computed(() => {
         ? `交易日 ${props.activeCapDate} · 沪深成交额口径`
         : '暂无沪深市场 0AMV 数据',
       accent: 'blue',
+    },
+    {
+      label: '汇金估算持仓（区间中值）',
+      value: latestAnchored.length > 0 ? formatYi(estTotalYi) : '—',
+      sub: estDateLabel
+        ? `纳入 ${latestAnchored.length}/${props.etfs.length} 只 · 估算日 ${estDateLabel} · 仅供方向参考`
+        : '无估算锚点',
+      accent: 'orange',
     },
     {
       label: '汇金最近披露合计份额',

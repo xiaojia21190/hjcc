@@ -131,7 +131,7 @@ const pieOption = computed<EChartsCoreOption>(() => {
           </div>
         </div>
         <div class="kpi">
-          <div class="k">汇金当前持仓</div>
+          <div class="k">估算持仓（参考）</div>
           <div class="v mono">
             <template v-if="latestAnchored">
               ≈ {{ formatYi(latestAnchored.huijinValueYi) }}
@@ -140,9 +140,9 @@ const pieOption = computed<EChartsCoreOption>(() => {
           </div>
         </div>
         <div class="kpi">
-          <div class="k">汇金当前占比</div>
+          <div class="k">估算占比（参考）</div>
           <div class="v mono huijin">
-            {{ latestAnchored ? formatPct(latestAnchored.huijinPct) : "待新披露" }}
+            {{ latestAnchored ? `≈ ${formatPct(latestAnchored.huijinPct)}` : "待新披露" }}
           </div>
         </div>
         <div class="estimate-note">
