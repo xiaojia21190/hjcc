@@ -103,6 +103,18 @@ export async function fetchEtfUniverse(): Promise<EtfQuote[]> {
       for (const quote of await fetchQuotesByCandidates()) {
         byCode.set(quote.code, quote)
       }
+    } else {
+      // 分页列表里某些 ETF 的 f2 可能返回 "-"（null），用单票接口补查
+      const candidateCodes = new Set(CATEGORIES.flatMap((c) => c.candidates))
+      const missingPrice = [...byCode.values()].filter(
+        (q) => candidateCodes.has(q.code) && q.price == null,
+      )
+      if (missingPrice.length > 0) {
+        console.log(`  补查 ${missingPrice.length} 只候选行情: ${missingPrice.map((q) => q.code).join(', ')}`)
+        for (const quote of await fetchQuotesByCandidates()) {
+          if (quote.price != null) byCode.set(quote.code, quote)
+        }
+      }
     }
     const universe = [...byCode.values()]
     if (!universe.length) throw new Error('ETF 行情列表为空')

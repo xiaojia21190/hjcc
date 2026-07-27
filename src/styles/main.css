@@ -474,7 +474,7 @@ tr:focus-visible {
 
 .market-stats {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   margin: 12px 0 4px;
   padding: 10px 0;
   border-top: 1px solid var(--line);

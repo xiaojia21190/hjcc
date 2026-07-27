@@ -15,6 +15,7 @@ import EtfTable from './components/EtfTable.vue'
 import EtfDetail from './components/EtfDetail.vue'
 import DataQualityBar from './components/DataQualityBar.vue'
 import { downloadCsv } from './utils/csv'
+import { computeMacd } from './utils/macd'
 
 const data = ref<DashboardData | null>(null)
 const loading = ref(true)
@@ -112,15 +113,20 @@ function downloadEtfCsv() {
 }
 
 function downloadMarketCsv() {
+  const history = data.value?.marketActiveCapHistory ?? []
+  const macdPoints = computeMacd(history.map((point) => point.activeCapYi))
   downloadCsv(
     `market-0amv-${snapshotDate()}.csv`,
-    ['日期', '0AMV估算_亿元', '中证全指收盘', '沪深两市成交额_亿元', '5日参考线_亿元'],
-    (data.value?.marketActiveCapHistory ?? []).map((point) => [
+    ['日期', '0AMV估算_亿元', '中证全指收盘', '沪深两市成交额_亿元', '5日参考线_亿元', 'DIF', 'DEA', 'MACD'],
+    history.map((point, index) => [
       point.date,
       point.activeCapYi,
       point.marketIndex,
       point.marketAmountYi,
       point.referenceMaYi,
+      macdPoints[index]?.dif ?? '',
+      macdPoints[index]?.dea ?? '',
+      macdPoints[index]?.macd ?? '',
     ]),
   )
 }

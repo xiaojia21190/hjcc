@@ -49,20 +49,16 @@ const option = computed<EChartsCoreOption>(() => {
 
   props.etfs.forEach((e, i) => {
     const color = palette[i % palette.length]
-    // 正式披露点（实线）
+    // 正式披露点（散点，不连线）：趋势图只锚定最新一期披露，
+    // 更早的历史披露在详情面板展示，避免稀疏历史点撑出空白时间轴。
+    const lastH = e.huijinHistory[e.huijinHistory.length - 1]
+    const lastV = lastH ? disclosedValue(lastH) : null
     series.push({
       name: e.categoryName,
-      type: 'line',
-      showSymbol: true,
-      symbolSize: 7,
-      lineStyle: { width: 2.2 },
+      type: 'scatter',
+      symbolSize: 10,
       itemStyle: { color },
-      data: e.huijinHistory
-        .map((h) => {
-          const v = disclosedValue(h)
-          return v != null ? { value: [h.reportDate, v] } : null
-        })
-        .filter(Boolean),
+      data: lastV != null ? [{ value: [lastH!.reportDate, lastV] }] : [],
     })
     // 占比区间估算（虚线），从最近披露点桥接
     const anchored = e.huijinEstimateHistory.filter(
@@ -170,9 +166,11 @@ const option = computed<EChartsCoreOption>(() => {
     },
     legend: {
       top: 0,
+      type: 'scroll',
+      data: props.etfs.map((e) => e.categoryName),
       textStyle: { color: '#93a4b8', fontSize: 12 },
     },
-    grid: { left: 52, right: 56, top: 40, bottom: 36 },
+    grid: { left: 52, right: 56, top: 56, bottom: 36 },
     xAxis: {
       type: 'time',
       ...axisStyle,

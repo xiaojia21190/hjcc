@@ -4,6 +4,7 @@ import type { MarketActiveCapPoint, MarketReportEvent } from '../../shared/types
 import BaseChart from './BaseChart.vue'
 import type { EChartsCoreOption } from 'echarts/core'
 import { changeClass, formatPct, formatYi } from '../utils/format'
+import { computeMacd } from '../utils/macd'
 
 const props = withDefaults(
   defineProps<{
@@ -24,6 +25,10 @@ function changePct(current: number, previous?: number): number | null {
   return ((current / previous) - 1) * 100
 }
 
+const macd = computed(() =>
+  computeMacd(props.history.map((point) => point.activeCapYi)),
+)
+
 const marketStats = computed(() => {
   const latest = props.history.at(-1)
   if (!latest) return []
@@ -38,6 +43,18 @@ const marketStats = computed(() => {
     latest.activeCapYi,
     latest.referenceMaYi ?? undefined,
   )
+  const macdLatest = macd.value.at(-1)
+  const macdPrevious = macd.value.at(-2)
+  const macdSub =
+    macdLatest == null
+      ? '数据不足'
+      : macdLatest.dif >= macdLatest.dea
+        ? macdPrevious != null && macdPrevious.dif < macdPrevious.dea
+          ? '金叉'
+          : '多头'
+        : macdPrevious != null && macdPrevious.dif >= macdPrevious.dea
+          ? '死叉'
+          : '空头'
 
   return [
     {
@@ -68,6 +85,12 @@ const marketStats = computed(() => {
       tone: changeClass(referenceGap),
     },
     {
+      label: 'MACD(12,26,9)',
+      value: macdLatest == null ? '—' : macdLatest.macd.toFixed(2),
+      sub: macdSub,
+      tone: macdLatest == null ? '' : changeClass(macdLatest.macd),
+    },
+    {
       label: '沪深两市成交额',
       value: formatYi(latest.marketAmountYi),
       sub: '上证综指 + 深证成指',
@@ -82,6 +105,7 @@ const option = computed<EChartsCoreOption>(() => {
   const visibleStart = Math.max(0, dates.length - 250)
   const historyDates = new Set(dates)
   const events = props.events.filter((event) => historyDates.has(event.date))
+  const macdPoints = macd.value
 
   return {
     backgroundColor: 'transparent',
@@ -92,19 +116,25 @@ const option = computed<EChartsCoreOption>(() => {
       borderColor: 'rgba(148,163,184,0.2)',
       textStyle: { color: '#e8eef7', fontSize: 12 },
     },
+    axisPointer: { link: [{ xAxisIndex: 'all' }] },
     legend: {
       top: 0,
       textStyle: { color: '#93a4b8', fontSize: 12 },
     },
-    grid: { left: 72, right: 72, top: 44, bottom: 70 },
+    grid: [
+      { left: 72, right: 72, top: 44, height: '48%' },
+      { left: 72, right: 72, top: '70%', height: '16%' },
+    ],
     dataZoom: [
       {
         type: 'inside',
+        xAxisIndex: [0, 1],
         startValue: visibleStart,
         endValue: Math.max(visibleStart, dates.length - 1),
       },
       {
         type: 'slider',
+        xAxisIndex: [0, 1],
         height: 20,
         bottom: 16,
         startValue: visibleStart,
@@ -115,13 +145,24 @@ const option = computed<EChartsCoreOption>(() => {
         textStyle: { color: '#6b7c90' },
       },
     ],
-    xAxis: {
-      type: 'category',
-      data: dates,
-      boundaryGap: true,
-      ...axisStyle,
-      axisLabel: { ...axisStyle.axisLabel, formatter: (value: string) => value.slice(0, 7) },
-    },
+    xAxis: [
+      {
+        type: 'category',
+        data: dates,
+        boundaryGap: true,
+        ...axisStyle,
+        axisLabel: { ...axisStyle.axisLabel, formatter: (value: string) => value.slice(0, 7) },
+      },
+      {
+        type: 'category',
+        gridIndex: 1,
+        data: dates,
+        boundaryGap: true,
+        ...axisStyle,
+        axisLabel: { show: false },
+        axisTick: { show: false },
+      },
+    ],
     yAxis: [
       {
         type: 'value',
@@ -134,6 +175,17 @@ const option = computed<EChartsCoreOption>(() => {
         type: 'value',
         name: '成交额（亿元）',
         nameTextStyle: { color: '#6b7c90', fontSize: 11 },
+        splitLine: { show: false },
+        axisLine: axisStyle.axisLine,
+        axisLabel: axisStyle.axisLabel,
+      },
+      {
+        type: 'value',
+        gridIndex: 1,
+        name: 'MACD',
+        nameTextStyle: { color: '#6b7c90', fontSize: 11 },
+        scale: true,
+        splitNumber: 2,
         splitLine: { show: false },
         axisLine: axisStyle.axisLine,
         axisLabel: axisStyle.axisLabel,
@@ -186,6 +238,42 @@ const option = computed<EChartsCoreOption>(() => {
         data: history.map((point) => point.marketAmountYi),
         barMaxWidth: 8,
         itemStyle: { color: 'rgba(94,234,212,0.18)' },
+        z: 1,
+      },
+      {
+        name: 'DIF',
+        type: 'line',
+        xAxisIndex: 1,
+        yAxisIndex: 2,
+        showSymbol: false,
+        data: macdPoints.map((point) => point.dif),
+        itemStyle: { color: '#e8eef7' },
+        lineStyle: { width: 1.4 },
+        z: 2,
+      },
+      {
+        name: 'DEA',
+        type: 'line',
+        xAxisIndex: 1,
+        yAxisIndex: 2,
+        showSymbol: false,
+        data: macdPoints.map((point) => point.dea),
+        itemStyle: { color: '#f0b429' },
+        lineStyle: { width: 1.4, type: 'dashed' },
+        z: 2,
+      },
+      {
+        name: 'MACD 柱',
+        type: 'bar',
+        xAxisIndex: 1,
+        yAxisIndex: 2,
+        data: macdPoints.map((point) => ({
+          value: point.macd,
+          itemStyle: {
+            color: point.macd >= 0 ? 'rgba(248,113,113,0.75)' : 'rgba(74,222,128,0.75)',
+          },
+        })),
+        barMaxWidth: 6,
         z: 1,
       },
     ],
