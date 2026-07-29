@@ -86,7 +86,7 @@ test('floor 不超过当日总份额', () => {
   expect(result[1]!.huijinSharesCeil).toBeCloseTo(60, 4)
 })
 
-test('无锚点时全部 unavailable', () => {
+test('无锚点时全部 unavailable，但日频点依然计算趋势信号', () => {
   const reports: HolderReport[] = [{
     reportDate: '2025-12-31',
     holders: [{ name: '张三', shares: 100e8, percent: 50, isHuijin: false }],
@@ -96,6 +96,7 @@ test('无锚点时全部 unavailable', () => {
   const result = buildHuijinEstimate(scale, reports, [])
   expect(result[0]!.estimateMethod).toBe('unavailable')
   expect(result[0]!.huijinShares).toBeNull()
+  expect(result[0]!.shareTrend).toBe('inflow')
 })
 
 test('锚点日之前非披露点为 unavailable', () => {

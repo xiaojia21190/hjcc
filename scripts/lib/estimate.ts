@@ -117,19 +117,19 @@ export function buildHuijinEstimate(
     })
   }
 
-  // 趋势信号（基于总份额流向，与口径无关）
-  const anchoredIdx = raw
-    .map((p, i) => (p.estimateMethod === 'anchored' ? i : -1))
+  // 趋势信号（基于总份额流向，所有日频规模点均可计算，与是否有汇金持仓锚点无关）
+  const dailyIdx = raw
+    .map((p, i) => (scale[i]?.frequency === 'daily' && p.totalSharesYi > 0 ? i : -1))
     .filter((i) => i >= 0)
-  if (anchoredIdx.length) {
+  if (dailyIdx.length) {
     const signals = computeTrendSignals(
-      anchoredIdx.map((i) => ({
+      dailyIdx.map((i) => ({
         date: raw[i]!.date,
         totalSharesYi: raw[i]!.totalSharesYi,
         netSubscriptionYi: raw[i]!.netSubscriptionYi ?? null,
       })),
     )
-    anchoredIdx.forEach((i, k) => {
+    dailyIdx.forEach((i, k) => {
       const sig = signals[k]!
       raw[i] = {
         ...raw[i]!,

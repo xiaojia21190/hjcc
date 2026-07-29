@@ -34,6 +34,9 @@ const rows = computed(() =>
     )
     const latestAnchored =
       anchoredPts.length > 0 ? anchoredPts[anchoredPts.length - 1] : null
+    const trendPts = e.huijinEstimateHistory.filter((p) => p.shareTrend != null)
+    const latestTrendPoint =
+      trendPts.length > 0 ? trendPts[trendPts.length - 1] : null
     return {
       code: e.code,
       categoryOrder,
@@ -59,9 +62,9 @@ const rows = computed(() =>
           : null,
       hasHuijin: !!latestDisclosure,
       estValueYi: latestAnchored?.huijinValueYi ?? null,
-      estShareTrend: latestAnchored?.shareTrend ?? null,
-      estConsecutiveDays: latestAnchored?.consecutiveDays ?? null,
-      estChangePct5d: latestAnchored?.shareChangePct5d ?? null,
+      estShareTrend: latestTrendPoint?.shareTrend ?? null,
+      estConsecutiveDays: latestTrendPoint?.consecutiveDays ?? null,
+      estChangePct5d: latestTrendPoint?.shareChangePct5d ?? null,
     }
   }),
 )

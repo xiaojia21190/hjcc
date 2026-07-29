@@ -152,8 +152,8 @@ for (const etf of data.etfs) {
       if (point.estimateMethod !== 'unavailable') errors.push(`${etf.code} ${point.date}: unexpected estimate method`)
       if (point.isEstimated) errors.push(`${etf.code} ${point.date}: unavailable point must not be marked estimated`)
       if (point.huijinShares != null || point.huijinPct != null || point.huijinValueYi != null) errors.push(`${etf.code} ${point.date}: unavailable point contains Huijin holdings`)
-      if (point.shareTrend != null || point.consecutiveDays != null || point.huijinSharesFloor != null) {
-        errors.push(`${etf.code} ${point.date}: unavailable point must not carry trend signals or range`)
+      if (point.huijinSharesFloor != null || point.huijinSharesCeil != null) {
+        errors.push(`${etf.code} ${point.date}: unavailable point must not carry range`)
       }
     }
   }
