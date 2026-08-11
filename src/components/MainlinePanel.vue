@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import type { EtfSnapshot, SectorTrendData } from '../../shared/types'
 import {
   evaluateMainline,
+  pickPrimaryWindow,
   sectorTrendToSeries,
   SECTOR_THRESHOLDS,
   VERDICT_LABEL,
@@ -111,16 +112,16 @@ function flowText(report: MainlineReport | null): string {
             <div class="insight-label">综合结论</div>
             <div class="insight-value">{{ VERDICT_LABEL[panel.report.verdict] }}</div>
             <div class="insight-detail muted">
-              取各窗口最弱一档 · {{ panel.report.categoryCount }} 个板块
+              以 20 日主观察窗为准 · {{ panel.report.categoryCount }} 个板块
             </div>
           </div>
           <div class="insight-signal-item">
             <div class="insight-label">20 日龙头</div>
             <div class="insight-value mono">
-              {{ panel.report.windows[1]?.leader?.categoryName ?? '—' }}
+              {{ pickPrimaryWindow(panel.report.windows)?.leader?.categoryName ?? '—' }}
             </div>
             <div class="insight-detail muted">
-              {{ signed(panel.report.windows[1]?.leader?.returnPct) }} 区间累计
+              {{ signed(pickPrimaryWindow(panel.report.windows)?.leader?.returnPct) }} 区间累计
             </div>
           </div>
           <div class="insight-signal-item">
@@ -163,16 +164,17 @@ function flowText(report: MainlineReport | null): string {
     <p class="muted insight-disclaimer">
       口径说明：分化度取历史两年分位，持续性为前半窗与后半窗收益排名的 Spearman
       相关，龙头日超额胜率为龙头跑赢等权平均的交易日占比。三项同时达标才记为「有主线」。
+      综合结论取 20 日主观察窗（与历史检验一致）；5 / 60 日仅作分窗对照，不参与降级。
       <br />
       <strong>历史检验（风格口径）</strong>：2020-09 以来逐日回溯，判为「有主线」的样本，
       其龙头在其后 20 日相对等权平均<strong>平均跑输 0.72%</strong>、跑赢率 49.1%，前视拉长到
-      120 日跑输扩大到 4.32%；调高任何门槛都只会让跑输加剧。判为「有主线」后 20 日仍为
-      「有主线」的比例（23.2%）也低于无条件基础比例（26.3%）。
+      120 日跑输扩大到约 4.3%；调高任何门槛都只会让跑输加剧。判为「有主线」后 20 日仍为
+      「有主线」的比例（23.2%）也低于无条件基础比例（约 26%）。
       <strong>风格口径不具备已验证的预测能力，据此追逐宽基龙头在历史样本上是亏损的。</strong>
       <br />
       <strong>历史检验（题材口径）</strong>：方向相反——判为「有主线」的样本其龙头此后 20 日
-      平均 +3.09%、跑赢率 52.3%，而「轮动无主线」组为 -3.92%、24.3%。但可用行情仅 600 个
-      交易日，相邻观察点共享 19/20 的窗口，44 个样本折算后只有约 2 个独立事件，
+      平均约 +3.3%、跑赢率约 50%，而「轮动无主线」组约 -3.8%、24%。但可用行情仅 600 个
+      交易日，相邻观察点共享 19/20 的窗口，约 46 个样本折算后只有约 2 个独立事件，
       前视窗口敏感性亦不稳定。<strong>该正向结果尚不足以确认，不应作为交易依据。</strong>
       <br />
       两个口径都只用于描述当下市场结构；本面板不构成投资建议。

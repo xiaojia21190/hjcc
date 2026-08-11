@@ -93,11 +93,43 @@ describe('evaluateMainline · 轮动无主线', () => {
     expect(result.reason).toContain('轮动')
   })
 
-  test('无法计算持续性的窗口被排除在综合结论之外', () => {
-    // 60 日窗口的前半窗全部同步，排名无方差 → insufficient，不参与降级
+  test('辅窗 insufficient 不影响主窗综合结论', () => {
+    // 60 日窗口的前半窗全部同步，排名无方差 → insufficient；综合仍取 20 日
     const multi = evaluateMainline(series, { windows: [WINDOW, 60] })
     expect(multi.windows[1].verdict).toBe('insufficient')
     expect(multi.verdict).toBe('rotation')
+  })
+})
+
+describe('evaluateMainline · 综合结论取主观察窗', () => {
+  // 早期各板块收益阶梯拉开（给 60 日制造前后半窗排名翻转的素材）；
+  // 130 日后 c0 稳定跑赢 → 20 日 mainline；
+  // 最近 5 日全员同步 → 5 日 none。
+  // 旧规则取最弱会把综合压成 none/rotation；新规则应锁定 20 日 mainline。
+  const series = buildSeries((ci, day) => {
+    if (day >= TOTAL_DAYS - 5) return 0.001
+    if (day < 130) return 0.001 + ci * 0.0005
+    return ci === 0 ? 0.004 : 0.0005
+  })
+
+  test('5 日 none 与 60 日 rotation 均不拖累 20 日 mainline', () => {
+    const report = evaluateMainline(series, { windows: [5, WINDOW, 60] })
+    expect(report.windows[0].verdict).toBe('none')
+    expect(report.windows[1].verdict).toBe('mainline')
+    expect(report.windows[2].verdict).toBe('rotation')
+    expect(report.verdict).toBe('mainline')
+  })
+
+  test('综合结论与 20 日窗判定一致', () => {
+    const report = evaluateMainline(series)
+    const primary = report.windows.find((w) => w.window === 20)
+    expect(primary).toBeDefined()
+    expect(report.verdict).toBe(primary!.verdict)
+  })
+
+  test('自定义 windows 不含 20 时退回中位档', () => {
+    const report = evaluateMainline(series, { windows: [5, 10, 15] })
+    expect(report.verdict).toBe(report.windows[1].verdict)
   })
 })
 

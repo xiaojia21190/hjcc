@@ -29,8 +29,10 @@ export {
 
 /** 分化度分位数的回溯样本量，约两年交易日。 */
 const PERCENTILE_LOOKBACK = 480
-/** 默认观察窗口：短、中、长三档。 */
+/** 默认观察窗口：短、中、长三档；综合结论与标定均以 20 日为准。 */
 export const DEFAULT_WINDOWS = [5, 20, 60]
+/** 主观察窗口：综合 verdict、龙头与资金确认的基准，并与 calibrate 口径对齐。 */
+export const PRIMARY_WINDOW = 20
 
 export type MainlineVerdict =
   | 'mainline' // 分化 + 持续 + 龙头超额稳定
@@ -76,7 +78,7 @@ export interface MainlineReport {
   /** 参与比较的板块数（取公共交易日后的口径）。 */
   categoryCount: number
   windows: MainlineWindowResult[]
-  /** 综合结论：取各窗口中最弱的一档。 */
+  /** 综合结论：取主观察窗（默认 20 日）的判定，与历史检验口径一致。 */
   verdict: MainlineVerdict
   headline: string
   /** 主窗口龙头的资金是否同向确认；无资金数据时为 null。 */
@@ -191,23 +193,31 @@ export const VERDICT_LABEL: Record<MainlineVerdict, string> = {
   insufficient: '数据不足',
 }
 
-/** 由弱到强的判定强度序列，用于取各窗口中最弱的一档。 */
-const VERDICT_STRENGTH: MainlineVerdict[] = [
-  'none',
-  'rotation',
-  'weak',
-  'mainline',
-]
+/**
+ * 选取主观察窗：优先 20 日（与标定、面板龙头一致）；
+ * 自定义 windows 若不含 20，则退回中位档。
+ */
+export function pickPrimaryWindow(
+  windows: MainlineWindowResult[],
+): MainlineWindowResult | undefined {
+  return (
+    windows.find((w) => w.window === PRIMARY_WINDOW) ??
+    windows[Math.floor(windows.length / 2)] ??
+    windows[0]
+  )
+}
 
-/** 综合结论：短中长窗口全部为 mainline 才算强主线，任一窗口更弱则整体降级。 */
+/**
+ * 综合结论取主观察窗判定。
+ * 不再对 5/20/60 取最弱：短窗 Spearman 噪声大，取 min 会把综合 mainline
+ * 触发率压到近 0，且与 calibrate 的 20 日口径错位。5/60 仅作分窗对照。
+ * 主窗 insufficient 时回退到其他可判定窗口，避免整段无结论。
+ */
 function combineVerdicts(windows: MainlineWindowResult[]): MainlineVerdict {
-  const valid = windows.filter((w) => w.verdict !== 'insufficient')
-  if (valid.length === 0) return 'insufficient'
-  return valid.reduce((weakest, current) =>
-    VERDICT_STRENGTH.indexOf(current.verdict) < VERDICT_STRENGTH.indexOf(weakest.verdict)
-      ? current
-      : weakest,
-  ).verdict
+  const primary = pickPrimaryWindow(windows)
+  if (primary && primary.verdict !== 'insufficient') return primary.verdict
+  const fallback = windows.find((w) => w.verdict !== 'insufficient')
+  return fallback?.verdict ?? 'insufficient'
 }
 
 function formatLeader(primary: MainlineWindowResult | undefined): string {
@@ -238,9 +248,8 @@ export function evaluateMainline(
   const windows = windowSizes.map((w) =>
     evaluateWindow(matrix, { window: w, thresholds: options.thresholds }),
   )
+  const primary = pickPrimaryWindow(windows)
   const verdict = combineVerdicts(windows)
-  // 主窗口取中位档（默认 20 日），作为龙头与资金确认的基准
-  const primary = windows[Math.floor(windows.length / 2)] ?? windows[0]
   const flowConfirmed =
     options.flows == null || primary?.leader == null
       ? null
