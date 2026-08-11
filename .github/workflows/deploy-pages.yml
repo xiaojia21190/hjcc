@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
   schedule:
     # 08:30 UTC = 16:30 Asia/Shanghai, Monday through Friday.
-    - cron: '30 8 * * 1-5'
+    - cron: '30 0,8 * * 1-5'
 
 permissions:
   contents: write
