@@ -6,7 +6,7 @@ import type {
   NavPoint,
   ScalePoint,
 } from '../../shared/types'
-import { fetchJson, fetchText, sleep } from './http'
+import { fetchJson, fetchText, isConnectionReset, sleep } from './http'
 
 interface PushDiff {
   f12: string
@@ -160,6 +160,16 @@ const KLINE_HOSTS = [
 let preferredKlineHost: string | null = null
 /** 大响应日线之间的间隔，避免密集打满同一域名。 */
 const MARKET_BAR_INTERVAL_MS = 800
+/**
+ * 三域名全部空响应后，再给东财冷却重试一轮的延迟。
+ * 取值与 sector.ts 的补抓间隔一致——属已验证的「给对端冷却」经验值。
+ */
+const RETRY_DELAY_MS = 2000
+/**
+ * 三域名全空后的重试轮数（不含首次）。封禁多为间歇抖动，一轮延迟通常即可恢复；
+ * 再多属持续封禁，重试无益，反而延长封禁态。
+ */
+const RETRY_ROUNDS = 1
 
 function parseKlines(json: MarketKlineResponse): MarketBar[] {
   return (json.data?.klines ?? [])
@@ -180,32 +190,65 @@ function parseKlines(json: MarketKlineResponse): MarketBar[] {
 export async function fetchMarketBars(
   secid: string,
   referer: string,
-  range: { beg?: string; lmt?: number } = {},
+  range: {
+    beg?: string
+    lmt?: number
+    /** 测试注入用：覆盖轮间延迟，避免真实 sleep 拖慢用例。生产不传。 */
+    retryDelayMs?: number
+    /** 测试注入用：覆盖重试轮数。生产不传，用 RETRY_ROUNDS。 */
+    retryRounds?: number
+  } = {},
 ): Promise<MarketBar[]> {
   const beg = range.beg ?? '20150101'
   const lmt = range.lmt ?? 5000
+  const retryDelayMs = range.retryDelayMs ?? RETRY_DELAY_MS
+  const retryRounds = range.retryRounds ?? RETRY_ROUNDS
   const path =
     `/api/qt/stock/kline/get?secid=${secid}&klt=101&fqt=1&beg=${beg}&end=20500101&lmt=${lmt}` +
     '&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58'
-  // 优先用已知可用域名，其余按顺序兜底
-  const hosts = preferredKlineHost
-    ? [preferredKlineHost, ...KLINE_HOSTS.filter((host) => host !== preferredKlineHost)]
-    : KLINE_HOSTS
 
-  let lastError: unknown
-  for (const host of hosts) {
-    try {
-      const bars = parseKlines(await fetchJson<MarketKlineResponse>(host + path, referer))
-      if (bars.length > 0) {
-        preferredKlineHost = host
-        return bars
+  /**
+   * 单轮：按优先序遍历三域名，命中即返回。
+   * 全部空响应抛 `Error('… 返回空 klines')`，其余异常原样上抛，
+   * 由外层据此判断是否值得延迟重试一轮。
+   */
+  const tryHosts = async (): Promise<MarketBar[]> => {
+    // 优先用已知可用域名，其余按顺序兜底
+    const hosts = preferredKlineHost
+      ? [preferredKlineHost, ...KLINE_HOSTS.filter((host) => host !== preferredKlineHost)]
+      : KLINE_HOSTS
+    let lastError: unknown
+    for (const host of hosts) {
+      try {
+        const bars = parseKlines(await fetchJson<MarketKlineResponse>(host + path, referer))
+        if (bars.length > 0) {
+          preferredKlineHost = host
+          return bars
+        }
+        lastError = new Error(`${host} 返回空 klines`)
+      } catch (error) {
+        lastError = error
       }
-      lastError = new Error(`${host} 返回空 klines`)
+    }
+    throw lastError ?? new Error(`日线抓取失败 secid=${secid}`)
+  }
+
+  // 首轮直接试；失败后仅在「空 klines」或「连接重置」这类间歇性、且冷却后
+  // 大概率恢复的情况才延迟重试。HTTP 层硬错误（4xx/5xx）重试价值低，直接抛。
+  for (let round = 0; round <= retryRounds; round++) {
+    try {
+      return await tryHosts()
     } catch (error) {
-      lastError = error
+      const recoverable =
+        error instanceof Error &&
+        (error.message.includes('返回空 klines') || isConnectionReset(error))
+      if (!recoverable || round === retryRounds) throw error
+      // 间歇抖动给东财留检索·DNS·冷却窗口，再试一轮
+      await sleep(retryDelayMs)
     }
   }
-  throw lastError ?? new Error(`日线抓取失败 secid=${secid}`)
+  // 不可达：循环必经 throw 或 return，此句仅为类型闭环
+  throw new Error(`日线抓取失败 secid=${secid}`)
 }
 
 /**
