@@ -8,6 +8,7 @@ import {
   formatEstimateSharesRange,
   formatEstimateValueRange,
   lowResolutionLabel,
+  structuralEstimateNote,
 } from "../utils/estimateDisplay";
 import type { EChartsCoreOption } from "echarts/core";
 
@@ -28,6 +29,12 @@ const latestAnchored = computed(() => {
   return pts.length > 0 ? pts[pts.length - 1] : null;
 });
 const latestEstimateRange = computed(() => estimateRangeYi(latestAnchored.value));
+const structuralNote = computed(() =>
+  structuralEstimateNote(
+    props.etf?.latestHuijin != null ? props.etf.latestHuijin.shares / 1e8 : null,
+    latestEstimateRange.value,
+  ),
+);
 
 const pieOption = computed<EChartsCoreOption>(() => {
   const holders = latestReport.value?.holders ?? [];
@@ -164,6 +171,9 @@ const pieOption = computed<EChartsCoreOption>(() => {
               ? `占比区间估算（${latestAnchored.date}）：展示值为下界 2/3 + 上界 1/3，非中值；下界=份额变动全归因汇金，上界=披露占比不变。${lowResolutionLabel(latestEstimateRange) ? lowResolutionLabel(latestEstimateRange) + "，点估计不可依赖。" : ""}`
               : "ETF 总份额变化不能识别持有人，无汇金披露锚点时不推算持仓"
           }}
+        </div>
+        <div v-if="structuralNote" class="estimate-note structural-warning">
+          {{ structuralNote }}
         </div>
       </div>
     </section>

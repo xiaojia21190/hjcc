@@ -97,3 +97,47 @@ export function estimateTooltip(
   }
   return parts.join(' · ')
 }
+
+export type EstimateChartMetric = 'percent' | 'shares' | 'value'
+
+/**
+ * 把亿份区间映射到趋势图主轴量纲。
+ * value 用展示估值/展示份额隐含净值外推；缺净值时返回 null。
+ */
+export function rangeToChartBounds(
+  range: EstimateRangeYi,
+  metric: EstimateChartMetric,
+  valueYi?: number | null,
+): { floor: number; ceil: number } | null {
+  if (metric === 'shares') return { floor: range.floor, ceil: range.ceil }
+  if (metric === 'percent') {
+    return {
+      floor: (range.floor / range.total) * 100,
+      ceil: (range.ceil / range.total) * 100,
+    }
+  }
+  if (valueYi == null || !Number.isFinite(valueYi) || range.point <= 0) return null
+  const px = valueYi / range.point
+  return { floor: range.floor * px, ceil: range.ceil * px }
+}
+
+/**
+ * 披露汇金份额已显著高于当前基金总份额时的结构说明。
+ * 此时全归因赎回会把 floor 压得很低，点估计信息量很差。
+ */
+export function structuralEstimateNote(
+  disclosedSharesYi: number | null | undefined,
+  range: EstimateRangeYi | null,
+): string | null {
+  if (disclosedSharesYi == null || !range || !(disclosedSharesYi > 0)) return null
+  if (disclosedSharesYi <= range.total * 1.05) return null
+  const multiple = disclosedSharesYi / range.total
+  const parts = [
+    `披露汇金份额约 ${disclosedSharesYi.toFixed(1)} 亿份，已约合当前总份额的 ${multiple.toFixed(1)} 倍`,
+    `总份额仅 ${range.total.toFixed(1)} 亿份，全归因赎回下界会被大幅压低`,
+  ]
+  if (range.lowResolution) {
+    parts.push('区间过宽，加权展示点不可当作真实持仓')
+  }
+  return parts.join('；') + '。'
+}

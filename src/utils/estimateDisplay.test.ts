@@ -4,6 +4,8 @@ import {
   formatEstimateSharesRange,
   formatEstimateValueRange,
   lowResolutionLabel,
+  rangeToChartBounds,
+  structuralEstimateNote,
   LOW_RESOLUTION_WIDTH_RATIO,
 } from './estimateDisplay'
 
@@ -65,5 +67,55 @@ describe('format helpers', () => {
     })!
     // 展示估值 15 亿 → 隐含 1.5 元/份
     expect(formatEstimateValueRange(15, range)).toBe('15.00 亿（12.00~18.00）')
+  })
+})
+
+describe('rangeToChartBounds', () => {
+  const range = estimateRangeYi({
+    huijinShares: 10e8,
+    huijinSharesFloor: 8,
+    huijinSharesCeil: 12,
+    totalSharesYi: 20,
+  })!
+
+  test('shares 原样', () => {
+    expect(rangeToChartBounds(range, 'shares')).toEqual({ floor: 8, ceil: 12 })
+  })
+
+  test('percent 按总份额换算', () => {
+    const b = rangeToChartBounds(range, 'percent')!
+    expect(b.floor).toBeCloseTo(40, 5)
+    expect(b.ceil).toBeCloseTo(60, 5)
+  })
+
+  test('value 用隐含净值', () => {
+    const b = rangeToChartBounds(range, 'value', 15)!
+    expect(b.floor).toBeCloseTo(12, 5)
+    expect(b.ceil).toBeCloseTo(18, 5)
+  })
+})
+
+describe('structuralEstimateNote', () => {
+  test('披露份额远高于总份额时给结构说明', () => {
+    const range = estimateRangeYi({
+      huijinShares: 22e8,
+      huijinSharesFloor: 5,
+      huijinSharesCeil: 58,
+      totalSharesYi: 68,
+    })!
+    const note = structuralEstimateNote(487, range)
+    expect(note).toContain('披露汇金份额')
+    expect(note).toContain('倍')
+    expect(note).toContain('加权展示点')
+  })
+
+  test('披露与总份额接近时不提示', () => {
+    const range = estimateRangeYi({
+      huijinShares: 90e8,
+      huijinSharesFloor: 85,
+      huijinSharesCeil: 100,
+      totalSharesYi: 186,
+    })!
+    expect(structuralEstimateNote(170, range)).toBeNull()
   })
 })

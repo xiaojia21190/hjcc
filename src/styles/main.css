@@ -655,6 +655,11 @@ tr:focus-visible {
   line-height: 1.3;
 }
 
+.estimate-note.structural-warning {
+  margin-top: 8px;
+  color: var(--huijin);
+}
+
 .detail-scale {
   margin: 2px 0 16px;
   padding: 12px;

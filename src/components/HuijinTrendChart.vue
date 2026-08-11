@@ -3,7 +3,11 @@ import { computed } from 'vue'
 import type { EtfSnapshot, HuijinPosition, HuijinEstimatePoint } from '../../shared/types'
 import BaseChart from './BaseChart.vue'
 import type { EChartsCoreOption } from 'echarts/core'
-import { estimateRangeYi, formatEstimateSharesRange } from '../utils/estimateDisplay'
+import {
+  estimateRangeYi,
+  formatEstimateSharesRange,
+  rangeToChartBounds,
+} from '../utils/estimateDisplay'
 
 const props = withDefaults(
   defineProps<{
@@ -21,6 +25,16 @@ const axisStyle = {
 
 const hasVerifiedPoint = computed(() =>
   props.etfs.some((etf) => etf.huijinHistory.length > 0),
+)
+
+/** 末日估算区间过宽的只数，用于图注降权提示。 */
+const lowResCount = computed(() =>
+  props.etfs.filter((etf) => {
+    const last = [...etf.huijinEstimateHistory]
+      .reverse()
+      .find((p) => p.estimateMethod === 'anchored')
+    return estimateRangeYi(last)?.lowResolution
+  }).length,
 )
 
 interface SeriesItem {
@@ -90,6 +104,48 @@ const option = computed<EChartsCoreOption>(() => {
         } satisfies SeriesItem
       })
       .filter(Boolean) as SeriesItem[]
+
+    // floor~ceil 带宽：stack 基线 + 宽度，视觉上托住虚线点估计
+    const bandPairs = anchored
+      .map((p) => {
+        const range = estimateRangeYi(p)
+        if (!range) return null
+        const bounds = rangeToChartBounds(range, props.metric, p.huijinValueYi)
+        if (!bounds) return null
+        return {
+          date: p.date,
+          floor: bounds.floor,
+          width: Math.max(0, bounds.ceil - bounds.floor),
+        }
+      })
+      .filter(Boolean) as { date: string; floor: number; width: number }[]
+    if (bandPairs.length > 0) {
+      series.push({
+        name: `${e.categoryName}·区间下界`,
+        type: 'line',
+        stack: `band-${e.code}`,
+        symbol: 'none',
+        lineStyle: { opacity: 0, width: 0 },
+        areaStyle: { opacity: 0 },
+        data: bandPairs.map((b) => [b.date, b.floor]),
+        tooltip: { show: false },
+        silent: true,
+        z: 1,
+      })
+      series.push({
+        name: `${e.categoryName}·区间带宽`,
+        type: 'line',
+        stack: `band-${e.code}`,
+        symbol: 'none',
+        lineStyle: { opacity: 0, width: 0 },
+        areaStyle: { color, opacity: 0.12 },
+        data: bandPairs.map((b) => [b.date, b.width]),
+        tooltip: { show: false },
+        silent: true,
+        z: 1,
+      })
+    }
+
     series.push({
       name: e.categoryName,
       type: 'line',
@@ -97,6 +153,7 @@ const option = computed<EChartsCoreOption>(() => {
       lineStyle: { width: 1.6, type: 'dashed' },
       itemStyle: { color },
       data: [...bridge, ...estData],
+      z: 3,
     })
     // 份额 5 日变化率次轴曲线
     const changeData = anchored
@@ -116,6 +173,7 @@ const option = computed<EChartsCoreOption>(() => {
         itemStyle: { color },
         data: changeData,
         tooltip: { show: false },
+        z: 2,
       } as Record<string, unknown>)
     }
   })
@@ -178,6 +236,7 @@ const option = computed<EChartsCoreOption>(() => {
       data: props.etfs.map((e) => e.categoryName),
       textStyle: { color: '#93a4b8', fontSize: 12 },
     },
+    // 带宽辅助系列不进图例
     grid: { left: 52, right: 56, top: 56, bottom: 36 },
     xAxis: {
       type: 'time',
@@ -205,7 +264,10 @@ const option = computed<EChartsCoreOption>(() => {
 
 <template>
   <p v-if="hasVerifiedPoint" class="chart-note">
-    实点为基金年报/半年报「十大持有人」正式披露；虚线为占比区间估算的加权展示点（下界 2/3 + 上界 1/3，非中值；tooltip 含 floor~ceil）。下界=份额变动全归因汇金，上界=披露占比不变。次轴细线为近 5 日<strong>ETF 总份额</strong>变化率，不能识别持有人，不代表汇金操作。
+    实点为基金年报/半年报「十大持有人」正式披露；浅色带为 floor~ceil 占比区间，虚线为加权展示点（下界 2/3 + 上界 1/3，非中值）。下界=份额变动全归因汇金，上界=披露占比不变。次轴细线为近 5 日<strong>ETF 总份额</strong>变化率，不能识别持有人，不代表汇金操作。
+    <template v-if="lowResCount > 0">
+      当前有 <strong>{{ lowResCount }}</strong> 只末日区间宽度 ≥ 总份额 30%，带宽很宽时点估计不可依赖。
+    </template>
   </p>
   <p v-else class="chart-note">
     当前没有可验证的汇金持仓披露，暂不绘制持仓趋势。
