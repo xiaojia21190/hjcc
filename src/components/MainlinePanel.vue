@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import type { EtfSnapshot, SectorTrendData } from '../../shared/types'
 import {
   evaluateMainline,
+  leaderRoleLabel,
   pickPrimaryWindow,
   sectorTrendToSeries,
   SECTOR_THRESHOLDS,
@@ -10,6 +11,7 @@ import {
   type FlowDirection,
   type MainlineLeader,
   type MainlineReport,
+  type MainlineWindowResult,
 } from '../utils/mainlineSignals'
 
 const props = withDefaults(
@@ -113,6 +115,15 @@ function flowText(report: MainlineReport | null): string {
   if (!report || report.flowConfirmed == null) return '无资金数据'
   return report.flowConfirmed ? '龙头份额净流入' : '龙头份额未同向'
 }
+
+/** 5 日半窗过短，Spearman 噪声大，表格中降权展示。 */
+function isNoisyWindow(row: MainlineWindowResult): boolean {
+  return row.window <= 5
+}
+
+function windowLabel(row: MainlineWindowResult): string {
+  return isNoisyWindow(row) ? `${row.window} 日 · 高噪声` : `${row.window} 日`
+}
 </script>
 
 <template>
@@ -124,7 +135,7 @@ function flowText(report: MainlineReport | null): string {
           分化度、持续性与龙头超额三项横截面度量；描述当下市场结构，不预测后市
         </p>
       </div>
-      <span class="pill">5 / 20 / 60 日</span>
+      <span class="pill">主 20 · 辅 5 / 60</span>
     </div>
 
     <div v-for="panel in panels" :key="panel.key" class="insight-impact">
@@ -146,7 +157,9 @@ function flowText(report: MainlineReport | null): string {
             </div>
           </div>
           <div class="insight-signal-item">
-            <div class="insight-label">20 日龙头</div>
+            <div class="insight-label">
+              20 日{{ leaderRoleLabel(panel.primaryLeader?.returnPct) }}
+            </div>
             <div class="insight-value mono">
               {{ panel.primaryLeader?.categoryName ?? '—' }}
             </div>
@@ -171,18 +184,28 @@ function flowText(report: MainlineReport | null): string {
                 <th>判定</th>
                 <th class="num">分化度分位</th>
                 <th class="num">前后半窗排名相关</th>
-                <th class="num">龙头日超额胜率</th>
-                <th>龙头</th>
+                <th class="num">日超额胜率</th>
+                <th>领先板块</th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="row in panel.report.windows" :key="row.window">
-                <td class="mono">{{ row.window }} 日</td>
+              <tr
+                v-for="row in panel.report.windows"
+                :key="row.window"
+                :class="{ 'is-noisy-window': isNoisyWindow(row) }"
+              >
+                <td class="mono">{{ windowLabel(row) }}</td>
                 <td>{{ VERDICT_LABEL[row.verdict] }}</td>
                 <td class="num mono">{{ pct(row.dispersionPercentile) }}</td>
                 <td class="num mono">{{ corr(row.persistence) }}</td>
                 <td class="num mono">{{ ratioPct(row.leaderEdgeRatio) }}</td>
-                <td>{{ row.leader?.categoryName ?? '—' }}</td>
+                <td>
+                  {{ row.leader?.categoryName ?? '—' }}
+                  <span
+                    v-if="row.leader && row.leader.returnPct < 0"
+                    class="muted leader-role-tag"
+                  >相对最强</span>
+                </td>
               </tr>
             </tbody>
           </table>
@@ -193,8 +216,9 @@ function flowText(report: MainlineReport | null): string {
 
     <p class="muted insight-disclaimer">
       口径说明：分化度取历史两年分位，持续性为前半窗与后半窗收益排名的 Spearman
-      相关，龙头日超额胜率为龙头跑赢等权平均的交易日占比。三项同时达标才记为「有主线」。
+      相关，日超额胜率为领先板块跑赢等权平均的交易日占比。三项同时达标才记为「有主线」。
       综合结论取 20 日主观察窗（与历史检验一致）；5 / 60 日仅作分窗对照，不参与降级。
+      5 日半窗过短、秩相关噪声大，表中标为高噪声；窗口收益为负时领先板块称「相对最强」。
       <br />
       <strong>历史检验（风格口径）</strong>：2020-09 以来逐日回溯，判为「有主线」的样本，
       其龙头在其后 20 日相对等权平均<strong>平均跑输 0.72%</strong>、跑赢率 49.1%，前视拉长到

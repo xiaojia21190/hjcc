@@ -58,6 +58,29 @@ describe('evaluateMainline · 有主线', () => {
   test('headline 含龙头与涨幅', () => {
     expect(report.headline).toContain('有主线')
     expect(report.headline).toContain('板块0')
+    expect(report.headline).toContain('龙头')
+    expect(report.headline).not.toContain('相对最强')
+  })
+})
+
+describe('evaluateMainline · 下跌市相对最强', () => {
+  // 全员下跌，c0 跌得最少且日日相对抗跌 → 结构上仍可判 mainline，但称谓应为「相对最强」
+  const series = buildSeries((ci, day) => {
+    if (day < 130) return -0.001
+    return ci === 0 ? -0.0005 : -0.004
+  })
+  const report = evaluateMainline(series, { windows: [WINDOW] })
+
+  test('判定仍可为 mainline（相对强弱结构）', () => {
+    expect(report.verdict).toBe('mainline')
+    expect(report.windows[0].leader?.category).toBe('c0')
+    expect(report.windows[0].leader!.returnPct).toBeLessThan(0)
+  })
+
+  test('headline 使用相对最强而非龙头', () => {
+    expect(report.headline).toContain('相对最强')
+    expect(report.headline).toContain('板块0')
+    expect(report.headline).not.toMatch(/\d+日龙头/)
   })
 })
 

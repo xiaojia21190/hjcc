@@ -745,6 +745,16 @@ tr:focus-visible {
   line-height: 1.35;
 }
 
+/* 5 日等高噪声辅窗：降权展示，仍保留数值供对照 */
+.insight-table tr.is-noisy-window td {
+  color: var(--text-mute);
+}
+
+.insight-table .leader-role-tag {
+  margin-left: 4px;
+  font-size: 11px;
+}
+
 .insight-value {
   margin: 3px 0;
   color: var(--text);

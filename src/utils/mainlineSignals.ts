@@ -238,11 +238,21 @@ function combineVerdicts(windows: MainlineWindowResult[]): MainlineVerdict {
   return fallback?.verdict ?? 'insufficient'
 }
 
+/**
+ * 窗口收益第一的展示称谓。
+ * 下跌市里「龙头」易被读成绝对上涨；收益为负时改称「相对最强」。
+ */
+export function leaderRoleLabel(returnPct: number | null | undefined): string {
+  if (returnPct == null) return '龙头'
+  return returnPct < 0 ? '相对最强' : '龙头'
+}
+
 function formatLeader(primary: MainlineWindowResult | undefined): string {
   if (!primary?.leader) return ''
   const { categoryName, returnPct } = primary.leader
   const sign = returnPct >= 0 ? '+' : ''
-  return `，${primary.window}日龙头 ${categoryName} ${sign}${returnPct.toFixed(1)}%`
+  const role = leaderRoleLabel(returnPct)
+  return `，${primary.window}日${role} ${categoryName} ${sign}${returnPct.toFixed(1)}%`
 }
 
 function formatWindowLabel(window: MainlineWindowResult): string {
