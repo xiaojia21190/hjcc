@@ -9,6 +9,7 @@ import {
   SECTOR_THRESHOLDS,
   VERDICT_LABEL,
   type FlowDirection,
+  type LeaderAlignmentStatus,
   type MainlineLeader,
   type MainlineReport,
   type MainlineWindowResult,
@@ -116,6 +117,18 @@ function flowText(report: MainlineReport | null): string {
   return report.flowConfirmed ? '龙头份额净流入' : '龙头份额未同向'
 }
 
+const ALIGNMENT_LABEL: Record<LeaderAlignmentStatus, string> = {
+  aligned: '中长期同龙头',
+  partial: '部分对齐',
+  split: '中长期龙头切换',
+  unknown: '跨窗不足',
+}
+
+function alignmentText(report: MainlineReport | null): string {
+  if (!report) return '—'
+  return ALIGNMENT_LABEL[report.leaderAlignment.status]
+}
+
 /** 5 日半窗过短，Spearman 噪声大，表格中降权展示。 */
 function isNoisyWindow(row: MainlineWindowResult): boolean {
   return row.window <= 5
@@ -165,6 +178,13 @@ function windowLabel(row: MainlineWindowResult): string {
             </div>
             <div class="insight-detail muted">
               {{ signed(panel.primaryLeader?.returnPct) }} 区间累计
+            </div>
+          </div>
+          <div class="insight-signal-item">
+            <div class="insight-label">跨窗领先</div>
+            <div class="insight-value mono">{{ alignmentText(panel.report) }}</div>
+            <div class="insight-detail muted">
+              {{ panel.report.leaderAlignment.summary ?? '描述性旁证 · 不改综合结论' }}
             </div>
           </div>
           <div class="insight-signal-item">
@@ -219,6 +239,7 @@ function windowLabel(row: MainlineWindowResult): string {
       相关，日超额胜率为领先板块跑赢等权平均的交易日占比。三项同时达标才记为「有主线」。
       综合结论取 20 日主观察窗（与历史检验一致）；5 / 60 日仅作分窗对照，不参与降级。
       5 日半窗过短、秩相关噪声大，表中标为高噪声；窗口收益为负时领先板块称「相对最强」。
+      「跨窗领先」比较 20 与 60 日领先板块是否同一，是 N 较小时对单窗 Spearman 的描述性旁证，不改综合结论。
       <br />
       <strong>历史检验（风格口径）</strong>：2020-09 以来逐日回溯，判为「有主线」的样本，
       其龙头在其后 20 日相对等权平均<strong>平均跑输 0.72%</strong>、跑赢率 49.1%，前视拉长到

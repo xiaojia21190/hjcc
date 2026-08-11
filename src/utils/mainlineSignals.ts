@@ -73,6 +73,22 @@ export interface MainlineWindowResult {
   reason: string
 }
 
+/**
+ * 跨窗领先板块是否同一——N 很小时单窗 Spearman 噪音大，
+ * 「20 与 60 是否同龙头」是更稳的描述性结构旁证，不进入 decideVerdict。
+ */
+export type LeaderAlignmentStatus =
+  | 'aligned' // 20 与 60 同龙头（若有 5 且不同会在 summary 注明）
+  | 'partial' // 仅部分辅窗与主窗同龙头，或缺 60 只能部分对齐
+  | 'split' // 20 与 60 龙头不同
+  | 'unknown' // 可比窗口不足
+
+export interface LeaderAlignment {
+  status: LeaderAlignmentStatus
+  /** 如「20/60 同为上证50」；无法判断时为 null。 */
+  summary: string | null
+}
+
 export interface MainlineReport {
   asOf: string | null
   /** 参与比较的板块数（取公共交易日后的口径）。 */
@@ -86,6 +102,8 @@ export interface MainlineReport {
    * 综合不降级，但避免用户只看 20 日忽略中长期反证或短窗噪声。
    */
   caution: string | null
+  /** 跨窗领先板块一致性；描述性旁证，不改综合 verdict。 */
+  leaderAlignment: LeaderAlignment
   /** 主窗口龙头的资金是否同向确认；无资金数据时为 null。 */
   flowConfirmed: boolean | null
 }
@@ -288,6 +306,69 @@ export function formatAuxCaution(
   return parts.join('；')
 }
 
+const UNKNOWN_ALIGNMENT: LeaderAlignment = { status: 'unknown', summary: null }
+
+function windowLeaderName(window: MainlineWindowResult): string {
+  return window.leader?.categoryName ?? window.leader?.category ?? '—'
+}
+
+/**
+ * 跨窗领先板块一致性。
+ * 优先看 20 vs 60（中长期是否同方向）；5 日仅作旁注。
+ * 不替代单窗 Spearman，也不改综合 verdict。
+ */
+export function summarizeLeaderAlignment(
+  windows: MainlineWindowResult[],
+  primary: MainlineWindowResult | undefined,
+): LeaderAlignment {
+  if (!primary?.leader) return UNKNOWN_ALIGNMENT
+
+  const primaryId = primary.leader.category
+  const primaryName = windowLeaderName(primary)
+  const long = windows.find(
+    (w) => w.window > primary.window && w.leader && w.verdict !== 'insufficient',
+  )
+  const short = windows.find(
+    (w) => w.window < primary.window && w.leader && w.verdict !== 'insufficient',
+  )
+
+  if (long?.leader) {
+    if (long.leader.category === primaryId) {
+      const base = `${primary.window}/${long.window} 同为 ${primaryName}`
+      if (short?.leader && short.leader.category !== primaryId) {
+        return {
+          status: 'aligned',
+          summary: `${base}；${short.window} 日为 ${windowLeaderName(short)}`,
+        }
+      }
+      return { status: 'aligned', summary: base }
+    }
+    return {
+      status: 'split',
+      summary:
+        `${primary.window} 日 ${primaryName}` +
+        ` · ${long.window} 日 ${windowLeaderName(long)}`,
+    }
+  }
+
+  if (short?.leader) {
+    if (short.leader.category === primaryId) {
+      return {
+        status: 'partial',
+        summary: `${short.window}/${primary.window} 同为 ${primaryName}`,
+      }
+    }
+    return {
+      status: 'partial',
+      summary:
+        `${primary.window} 日 ${primaryName}` +
+        ` · ${short.window} 日 ${windowLeaderName(short)}`,
+    }
+  }
+
+  return UNKNOWN_ALIGNMENT
+}
+
 /** 主入口：多窗口评估一段行情是否存在风格主线。 */
 export function evaluateMainline(
   series: CategoryNavSeries[],
@@ -303,6 +384,7 @@ export function evaluateMainline(
       verdict: 'insufficient',
       headline: '数据不足，无法判定主线',
       caution: null,
+      leaderAlignment: UNKNOWN_ALIGNMENT,
       flowConfirmed: null,
     }
   }
@@ -324,6 +406,7 @@ export function evaluateMainline(
     verdict,
     headline: `${VERDICT_LABEL[verdict]}${formatLeader(primary)}`,
     caution: formatAuxCaution(windows, primary),
+    leaderAlignment: summarizeLeaderAlignment(windows, primary),
     flowConfirmed,
   }
 }

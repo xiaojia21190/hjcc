@@ -193,6 +193,42 @@ describe('evaluateMainline · 辅窗分歧 caution', () => {
   })
 })
 
+describe('evaluateMainline · 跨窗领先一致性', () => {
+  test('20/60 同龙头时 status 为 aligned', () => {
+    const series = buildSeries((ci, day) => {
+      if (day < 130) return 0.001
+      return ci === 0 ? 0.004 : 0.0005
+    })
+    const report = evaluateMainline(series, { windows: [5, WINDOW, 60] })
+    expect(report.leaderAlignment.status).toBe('aligned')
+    expect(report.leaderAlignment.summary).toContain('20/60 同为 板块0')
+  })
+
+  test('20/60 龙头切换时 status 为 split，且不改综合 verdict', () => {
+    // 140–179：c1 单边领涨（撑起 60 日龙头）；近 20 日改由 c0 领涨
+    const series = buildSeries((ci, day) => {
+      if (day < 140) return 0.001
+      if (day < 180) return ci === 1 ? 0.01 : 0
+      return ci === 0 ? 0.015 : 0
+    })
+    const report = evaluateMainline(series, { windows: [WINDOW, 60] })
+    expect(report.windows[0].leader?.category).toBe('c0')
+    expect(report.windows[1].leader?.category).toBe('c1')
+    expect(report.leaderAlignment.status).toBe('split')
+    expect(report.leaderAlignment.summary).toContain('20 日 板块0')
+    expect(report.leaderAlignment.summary).toContain('60 日 板块1')
+    // 旁证不降级：综合仍等于 20 日窗
+    expect(report.verdict).toBe(report.windows[0].verdict)
+  })
+
+  test('仅有主窗时 leaderAlignment 为 unknown', () => {
+    const series = buildSeries((ci, day) => (ci === 0 ? 0.004 : 0.001))
+    const report = evaluateMainline(series, { windows: [WINDOW] })
+    expect(report.leaderAlignment.status).toBe('unknown')
+    expect(report.leaderAlignment.summary).toBeNull()
+  })
+})
+
 describe('evaluateMainline · 无主线', () => {
   // 前 300 天高度分化，最近窗口齐涨齐跌
   const series = buildSeries((ci, day) => (day < 300 ? (ci === 0 ? 0.005 : 0) : 0.001), {
