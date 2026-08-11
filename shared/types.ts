@@ -131,6 +131,27 @@ export interface MarketReportEvent {
   label: string
 }
 
+/** 单个行业板块的收盘序列，与 SectorTrendData.dates 等长且按位对齐。 */
+export interface SectorSeries {
+  /** 东财板块代码，如 BK0475。 */
+  code: string
+  name: string
+  closes: number[]
+}
+
+/**
+ * 行业板块日线收盘矩阵，用于题材主线判定。
+ * 全部板块共用一条交易日轴，抓取时已按交集对齐，因此天然可比。
+ */
+export interface SectorTrendData {
+  /** 共用交易日轴，升序。 */
+  dates: string[]
+  sectors: SectorSeries[]
+  /** 板块层级说明与数据来源。 */
+  source: string
+  fetchedAt: string
+}
+
 export interface EtfSnapshot {
   category: IndexCategory
   categoryName: string
@@ -172,6 +193,8 @@ export interface DashboardData {
   marketActiveCapHistory: MarketActiveCapPoint[]
   /** 0AMV 的定义、计算口径和数据来源说明。 */
   marketActiveCapSource: string
+  /** 行业板块日线矩阵；抓取失败时为 null，题材主线判定随之降级。 */
+  sectorTrend: SectorTrendData | null
   summary: {
     /** 各 ETF 最近一期汇金披露份额按报告日附近净值计算的合计估值（元）。 */
     totalHuijinMarketValue: number | null

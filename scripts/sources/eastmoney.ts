@@ -143,14 +143,25 @@ interface MarketBar {
   amount: number
 }
 
-export async function fetchMarketBars(
-  secid: string,
-  referer: string,
-): Promise<MarketBar[]> {
-  const url =
-    `https://push2his.eastmoney.com/api/qt/stock/kline/get?secid=${secid}&klt=101&fqt=1&beg=20150101&end=20500101&lmt=5000` +
-    '&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58'
-  const json = await fetchJson<MarketKlineResponse>(url, referer)
+export type { MarketBar }
+
+/**
+ * 日线域名回退链。push2his 是主力，但该路径曾被东财按 `kline/get` 整体封禁
+ * （返回 TCP RST 而非 HTTP 状态码），故备下同构域名。
+ * 注意 push2delay 会以 HTTP 200 返回空 klines，因此回退判据必须是「有数据」
+ * 而不是「响应成功」，否则会静默拿到空序列。
+ */
+const KLINE_HOSTS = [
+  'https://push2his.eastmoney.com',
+  'https://push2.eastmoney.com',
+  'https://push2delay.eastmoney.com',
+]
+/** 记住上一次真正返回数据的域名，避免每个请求都从已封禁的域名重试一遍。 */
+let preferredKlineHost: string | null = null
+/** 大响应日线之间的间隔，避免密集打满同一域名。 */
+const MARKET_BAR_INTERVAL_MS = 800
+
+function parseKlines(json: MarketKlineResponse): MarketBar[] {
   return (json.data?.klines ?? [])
     .map((line) => {
       const [date, , close, , , , amount] = line.split(',')
@@ -166,17 +177,55 @@ export async function fetchMarketBars(
     )
 }
 
+export async function fetchMarketBars(
+  secid: string,
+  referer: string,
+  range: { beg?: string; lmt?: number } = {},
+): Promise<MarketBar[]> {
+  const beg = range.beg ?? '20150101'
+  const lmt = range.lmt ?? 5000
+  const path =
+    `/api/qt/stock/kline/get?secid=${secid}&klt=101&fqt=1&beg=${beg}&end=20500101&lmt=${lmt}` +
+    '&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58'
+  // 优先用已知可用域名，其余按顺序兜底
+  const hosts = preferredKlineHost
+    ? [preferredKlineHost, ...KLINE_HOSTS.filter((host) => host !== preferredKlineHost)]
+    : KLINE_HOSTS
+
+  let lastError: unknown
+  for (const host of hosts) {
+    try {
+      const bars = parseKlines(await fetchJson<MarketKlineResponse>(host + path, referer))
+      if (bars.length > 0) {
+        preferredKlineHost = host
+        return bars
+      }
+      lastError = new Error(`${host} 返回空 klines`)
+    } catch (error) {
+      lastError = error
+    }
+  }
+  throw lastError ?? new Error(`日线抓取失败 secid=${secid}`)
+}
+
 /**
  * 指南针原版 0AMV 算法未公开。这里采用公开流传的近似公式：
  * SMA(AMOUNT, 10, 1) * CLOSE / MA(REF(CLOSE, 1), 5)。
  * 中证全指 000985 提供市场价格代理；成交额为上证综指与深证成指成交额之和。
  */
 export async function fetchMarketActiveCapHistory(): Promise<MarketActiveCapPoint[]> {
-  const [priceBars, shBars, szBars] = await Promise.all([
-    fetchMarketBars('1.000985', 'https://quote.eastmoney.com/zs000985.html'),
-    fetchMarketBars('1.000001', 'https://quote.eastmoney.com/zs000001.html'),
-    fetchMarketBars('0.399001', 'https://quote.eastmoney.com/sz399001.html'),
-  ])
+  // 三条都是 lmt=5000 的大响应，并发打出去正是触发日线接口封禁的主因，故串行 + 间隔。
+  const specs: [string, string][] = [
+    ['1.000985', 'https://quote.eastmoney.com/zs000985.html'],
+    ['1.000001', 'https://quote.eastmoney.com/zs000001.html'],
+    ['0.399001', 'https://quote.eastmoney.com/sz399001.html'],
+  ]
+  const series: MarketBar[][] = []
+  for (const [secid, referer] of specs) {
+    if (series.length > 0) await sleep(MARKET_BAR_INTERVAL_MS)
+    series.push(await fetchMarketBars(secid, referer))
+  }
+  const [priceBars, shBars, szBars] = series
   const shByDate = new Map(shBars.map((bar) => [bar.date, bar]))
   const szByDate = new Map(szBars.map((bar) => [bar.date, bar]))
   const bars = priceBars

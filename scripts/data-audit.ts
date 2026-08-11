@@ -91,14 +91,26 @@ for (const etf of data.etfs) {
   for (const point of etf.huijinEstimateHistory) {
     if (point.totalSharesYi < 0 || point.netAssetYi < 0) errors.push(`${etf.code} ${point.date}: invalid estimate scale`)
     if (point.huijinPct != null && (point.huijinPct < 0 || point.huijinPct > 100)) errors.push(`${etf.code} ${point.date}: Huijin percentage outside 0-100`)
+    // 趋势信号取自交易所总份额流向，与汇金是否披露、能否推算无关，
+    // 因此三类点都可能携带；此处只校验取值有效性，归属见各分支。
+    if (point.shareTrend != null && !['inflow', 'outflow', 'flat'].includes(point.shareTrend)) {
+      errors.push(`${etf.code} ${point.date}: invalid shareTrend`)
+    }
+    if (point.consecutiveDays != null && (!finite(point.consecutiveDays) || point.consecutiveDays < 1)) {
+      errors.push(`${etf.code} ${point.date}: invalid consecutiveDays`)
+    }
+    if (point.shareChangePct5d != null && !finite(point.shareChangePct5d)) {
+      errors.push(`${etf.code} ${point.date}: invalid shareChangePct5d`)
+    }
     const report = disclosedByDate.get(point.date)
     if (report) {
       if (point.estimateMethod !== 'disclosed') errors.push(`${etf.code} ${point.date}: disclosure date not marked disclosed`)
       if (point.isEstimated) errors.push(`${etf.code} ${point.date}: disclosed point must not be marked estimated`)
       if (point.huijinShares == null || Math.abs(point.huijinShares - report.huijinShares) > 1) errors.push(`${etf.code} ${point.date}: aligned disclosed shares mismatch`)
       if (point.huijinPct == null || Math.abs(point.huijinPct - report.huijinPercent) > 0.02) errors.push(`${etf.code} ${point.date}: aligned disclosed percentage mismatch`)
-      if (point.shareTrend != null || point.consecutiveDays != null || point.huijinSharesFloor != null) {
-        errors.push(`${etf.code} ${point.date}: disclosed point must not carry trend signals or range`)
+      // 区间是 anchored 推算的产物；披露点份额已知，不应带区间
+      if (point.huijinSharesFloor != null || point.huijinSharesCeil != null) {
+        errors.push(`${etf.code} ${point.date}: disclosed point must not carry range`)
       }
     } else if (point.estimateMethod === 'anchored') {
       if (!point.isEstimated) errors.push(`${etf.code} ${point.date}: anchored point must be marked estimated`)
@@ -134,16 +146,6 @@ for (const etf of data.etfs) {
         }
       }
       if (point.huijinValueYi != null && (!finite(point.huijinValueYi) || point.huijinValueYi < 0)) errors.push(`${etf.code} ${point.date}: invalid anchored value`)
-      // 趋势信号校验
-      if (point.shareTrend != null && !['inflow', 'outflow', 'flat'].includes(point.shareTrend)) {
-        errors.push(`${etf.code} ${point.date}: invalid shareTrend`)
-      }
-      if (point.consecutiveDays != null && (!finite(point.consecutiveDays) || point.consecutiveDays < 1)) {
-        errors.push(`${etf.code} ${point.date}: invalid consecutiveDays`)
-      }
-      if (point.shareChangePct5d != null && !finite(point.shareChangePct5d)) {
-        errors.push(`${etf.code} ${point.date}: invalid shareChangePct5d`)
-      }
       // clamp 字段不应存在
       if ('clampTriggered' in point || 'clampReliability' in point) {
         errors.push(`${etf.code} ${point.date}: legacy clamp field present on anchored point`)

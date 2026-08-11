@@ -10,6 +10,7 @@ import SummaryCards from './components/SummaryCards.vue'
 import HuijinTrendChart from './components/HuijinTrendChart.vue'
 import ActiveCapChart from './components/ActiveCapChart.vue'
 import MarketInsightPanel from './components/MarketInsightPanel.vue'
+import MainlinePanel from './components/MainlinePanel.vue'
 import ShareTrendChart from './components/ShareTrendChart.vue'
 import EtfTable from './components/EtfTable.vue'
 import EtfDetail from './components/EtfDetail.vue'
@@ -282,6 +283,21 @@ onMounted(reload)
           <MarketInsightPanel
             :history="data?.marketActiveCapHistory ?? []"
             :events="marketEvents"
+          />
+        </section>
+
+        <section class="card panel">
+          <div class="panel-head">
+            <div>
+              <h2>主线结构判定</h2>
+              <p class="muted">
+                横截面分化度、排名持续性与龙头超额；描述当下市场结构，不预测后市
+              </p>
+            </div>
+          </div>
+          <MainlinePanel
+            :etfs="data?.etfs ?? []"
+            :sector-trend="data?.sectorTrend ?? null"
           />
         </section>
 

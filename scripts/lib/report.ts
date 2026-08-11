@@ -67,6 +67,15 @@ export function formatCompletenessReport(data: DashboardData): string {
     `0AMV: ${mkt.length} 条 (${mkt[0]?.date ?? '—'} → ${mkt.at(-1)?.date ?? '—'})`,
   )
 
+  // 行业板块：抓取失败会沿用上次快照，这里要能看出数据是否陈旧
+  const sector = data.sectorTrend
+  lines.push(
+    sector
+      ? `行业板块: ${sector.sectors.length} 只 × ${sector.dates.length} 个交易日 ` +
+        `(${sector.dates[0] ?? '—'} → ${sector.dates.at(-1) ?? '—'})`
+      : '行业板块: 无数据 ⚠ 题材主线判定不可用',
+  )
+
   // 缺口合计
   lines.push(`缺口合计: ${totalSseGaps} 日 (SSE) / ${totalSzseGaps} 段 (SZSE)`)
 

@@ -24,6 +24,7 @@ function minimalDashboard(overrides: Partial<DashboardData> = {}): DashboardData
       { date: '2024-01-04', activeCapYi: 102, marketIndex: 3020, marketAmountYi: 5200, referenceMaYi: null },
     ],
     marketActiveCapSource: '',
+    sectorTrend: null,
     summary: { totalHuijinMarketValue: null, latestActiveCapYi: null, latestActiveCapDate: null, etfCount: 1, latestReportDate: null },
     ...overrides,
   }
@@ -46,7 +47,9 @@ test('覆盖率 100% 时无 ⚠', () => {
   })
   const report = formatCompletenessReport(d)
   expect(report).toContain('3/3')
-  expect(report).not.toContain('⚠')
+  // 只断言 ETF 行本身无警告：报告其他行（如行业板块缺失）有各自的 ⚠ 语义
+  const etfLine = report.split('\n').find((line) => line.includes('510050'))
+  expect(etfLine).not.toContain('⚠')
 })
 
 test('缺口列表展示', () => {
@@ -55,4 +58,25 @@ test('缺口列表展示', () => {
   const report = formatCompletenessReport(d)
   expect(report).toContain('2024-01-04')
   expect(report).toContain('缺口合计: 1 日 (SSE)')
+})
+
+test('报告包含行业板块状态', () => {
+  const report = formatCompletenessReport(
+    minimalDashboard({
+      sectorTrend: {
+        dates: ['2024-01-02', '2024-01-03'],
+        sectors: [{ code: 'BK0475', name: '银行Ⅱ', closes: [100, 101] }],
+        source: 'test',
+        fetchedAt: '2026-08-04T00:00:00Z',
+      },
+    }),
+  )
+  expect(report).toContain('行业板块: 1 只 × 2 个交易日')
+  expect(report).toContain('2024-01-02 → 2024-01-03')
+})
+
+test('无行业板块数据时报告给出警告', () => {
+  const report = formatCompletenessReport(minimalDashboard({ sectorTrend: null }))
+  expect(report).toContain('行业板块: 无数据')
+  expect(report).toContain('题材主线判定不可用')
 })

@@ -1,17 +1,45 @@
 const UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
 
+/** 连接层错误码：对端在 TCP 层拒绝或重置，重试价值远低于 HTTP 层错误。 */
+const RESET_CODES = new Set(['ECONNRESET', 'ECONNREFUSED', 'EPIPE'])
+/** 常规错误的重试次数。 */
+const DEFAULT_RETRIES = 5
+/**
+ * 连接重置的重试次数。压到 2 次是有意的——对端按路径封禁时返回的是 TCP RST
+ * 而非 HTTP 状态码，继续重试既救不回来，又会延长封禁。留 2 次是为了容忍偶发抖动。
+ */
+const RESET_RETRIES = 2
+
 export async function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms))
+}
+
+/**
+ * 是否为连接层重置类错误。
+ * 超时不计入——超时可能只是临时拥塞，按常规退避重试仍有意义。
+ */
+export function isConnectionReset(error: unknown): boolean {
+  if (!(error instanceof Error)) return false
+  const code = (error as { code?: unknown }).code
+  if (typeof code === 'string' && RESET_CODES.has(code)) return true
+  // Bun 部分场景不带 code，只能回退到文案匹配
+  return error.message.includes('socket connection was closed')
+}
+
+/** 第 attempt 次失败后的等待毫秒数；连接重置退避更长，给对端冷却留时间。 */
+export function retryDelayMs(attempt: number, reset: boolean): number {
+  return (reset ? 1500 : 400) * 2 ** attempt
 }
 
 export async function fetchText(
   url: string,
   referer = 'https://finance.sina.com.cn/',
-  retries = 5,
+  retries = DEFAULT_RETRIES,
 ): Promise<string> {
   let lastErr: unknown
-  for (let i = 0; i < retries; i++) {
+  let limit = retries
+  for (let i = 0; i < limit; i++) {
     try {
       const res = await fetch(url, {
         headers: {
@@ -31,8 +59,11 @@ export async function fetchText(
       }
     } catch (e) {
       lastErr = e
-      // 指数退避 400 * 2^i
-      await sleep(400 * 2 ** i)
+      const reset = isConnectionReset(e)
+      // 连接重置时收紧重试上限，避免在封禁态下持续撞墙
+      if (reset) limit = Math.min(limit, RESET_RETRIES)
+      if (i + 1 >= limit) break
+      await sleep(retryDelayMs(i, reset))
     }
   }
   throw lastErr
