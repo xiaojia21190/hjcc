@@ -18,6 +18,7 @@ import {
 import {
   evaluateWindow,
   sectorTrendToSeries,
+  SECTOR_THRESHOLDS,
   STYLE_THRESHOLDS,
   type MainlineThresholds,
   type MainlineVerdict,
@@ -261,7 +262,7 @@ async function main() {
 
   if (dashboard.sectorTrend) {
     const sectorMatrix = alignSeries(sectorTrendToSeries(dashboard.sectorTrend))
-    if (sectorMatrix) calibrate('行业题材口径', sectorMatrix, STYLE_THRESHOLDS)
+    if (sectorMatrix) calibrate('行业题材口径', sectorMatrix, SECTOR_THRESHOLDS)
   } else {
     console.log('\n快照中无行业板块数据，跳过题材口径标定')
   }

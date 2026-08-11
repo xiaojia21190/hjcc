@@ -120,6 +120,14 @@ describe('evaluateMainline · 综合结论取主观察窗', () => {
     expect(report.verdict).toBe('mainline')
   })
 
+  test('辅窗弱于主窗时给出 caution，但不降级综合结论', () => {
+    const report = evaluateMainline(series, { windows: [5, WINDOW, 60] })
+    expect(report.verdict).toBe('mainline')
+    expect(report.caution).toContain('5日无主线')
+    expect(report.caution).toContain('60日轮动无主线')
+    expect(report.caution).toContain('弱于主窗')
+  })
+
   test('综合结论与 20 日窗判定一致', () => {
     const report = evaluateMainline(series)
     const primary = report.windows.find((w) => w.window === 20)
@@ -130,6 +138,35 @@ describe('evaluateMainline · 综合结论取主观察窗', () => {
   test('自定义 windows 不含 20 时退回中位档', () => {
     const report = evaluateMainline(series, { windows: [5, 10, 15] })
     expect(report.verdict).toBe(report.windows[1].verdict)
+  })
+})
+
+describe('evaluateMainline · 辅窗分歧 caution', () => {
+  test('主辅窗判定一致时 caution 为 null', () => {
+    // 全程 c0 稳定跑赢：三窗同为 mainline
+    const series = buildSeries((ci, day) => {
+      if (day < 130) return 0.001
+      return ci === 0 ? 0.004 : 0.0005
+    })
+    const report = evaluateMainline(series, { windows: [5, WINDOW, 60] })
+    expect(report.verdict).toBe('mainline')
+    expect(report.windows.every((w) => w.verdict === 'mainline')).toBe(true)
+    expect(report.caution).toBeNull()
+  })
+
+  test('仅短窗更强时提示未计入综合', () => {
+    // 早期拉开分化历史；中段齐涨把 20 日压到低分位 none；最近 5 日 c0 暴拉 → 5 日 mainline
+    const series = buildSeries((ci, day) => {
+      if (day >= TOTAL_DAYS - 5) return ci === 0 ? 0.025 : -0.001
+      if (day < 160) return ci * 0.002
+      return 0.001
+    })
+    const report = evaluateMainline(series, { windows: [5, WINDOW] })
+    expect(report.windows[0].verdict).toBe('mainline')
+    expect(report.windows[1].verdict).toBe('none')
+    expect(report.verdict).toBe('none')
+    expect(report.caution).toContain('5日有主线')
+    expect(report.caution).toContain('未计入综合')
   })
 })
 

@@ -81,6 +81,11 @@ export interface MainlineReport {
   /** 综合结论：取主观察窗（默认 20 日）的判定，与历史检验口径一致。 */
   verdict: MainlineVerdict
   headline: string
+  /**
+   * 5 / 60 等辅窗与主窗分歧时的提示；无分歧为 null。
+   * 综合不降级，但避免用户只看 20 日忽略中长期反证或短窗噪声。
+   */
+  caution: string | null
   /** 主窗口龙头的资金是否同向确认；无资金数据时为 null。 */
   flowConfirmed: boolean | null
 }
@@ -193,6 +198,19 @@ export const VERDICT_LABEL: Record<MainlineVerdict, string> = {
   insufficient: '数据不足',
 }
 
+/** 由弱到强，用于比较主辅窗分歧方向（不参与综合降级）。 */
+const VERDICT_STRENGTH: MainlineVerdict[] = [
+  'none',
+  'rotation',
+  'weak',
+  'mainline',
+]
+
+function verdictStrength(verdict: MainlineVerdict): number {
+  const index = VERDICT_STRENGTH.indexOf(verdict)
+  return index < 0 ? -1 : index
+}
+
 /**
  * 选取主观察窗：优先 20 日（与标定、面板龙头一致）；
  * 自定义 windows 若不含 20，则退回中位档。
@@ -227,6 +245,39 @@ function formatLeader(primary: MainlineWindowResult | undefined): string {
   return `，${primary.window}日龙头 ${categoryName} ${sign}${returnPct.toFixed(1)}%`
 }
 
+function formatWindowLabel(window: MainlineWindowResult): string {
+  return `${window.window}日${VERDICT_LABEL[window.verdict]}`
+}
+
+/**
+ * 主辅窗分歧提示。综合仍以主窗为准；此处只提示更弱的中长期反证，
+ * 以及更强但未计入综合的短窗噪声，避免只读 headline 漏掉分窗信息。
+ */
+export function formatAuxCaution(
+  windows: MainlineWindowResult[],
+  primary: MainlineWindowResult | undefined,
+): string | null {
+  if (!primary || primary.verdict === 'insufficient') return null
+  const primaryLevel = verdictStrength(primary.verdict)
+  if (primaryLevel < 0) return null
+
+  const aux = windows.filter(
+    (w) => w !== primary && w.verdict !== 'insufficient' && w.window !== primary.window,
+  )
+  const weaker = aux.filter((w) => verdictStrength(w.verdict) < primaryLevel)
+  const stronger = aux.filter((w) => verdictStrength(w.verdict) > primaryLevel)
+  if (weaker.length === 0 && stronger.length === 0) return null
+
+  const parts: string[] = []
+  if (weaker.length > 0) {
+    parts.push(`${weaker.map(formatWindowLabel).join('、')}，弱于主窗`)
+  }
+  if (stronger.length > 0) {
+    parts.push(`${stronger.map(formatWindowLabel).join('、')}，未计入综合`)
+  }
+  return parts.join('；')
+}
+
 /** 主入口：多窗口评估一段行情是否存在风格主线。 */
 export function evaluateMainline(
   series: CategoryNavSeries[],
@@ -241,6 +292,7 @@ export function evaluateMainline(
       windows: windowSizes.map((w) => emptyWindow(w, '可比板块不足或无公共交易日')),
       verdict: 'insufficient',
       headline: '数据不足，无法判定主线',
+      caution: null,
       flowConfirmed: null,
     }
   }
@@ -261,6 +313,7 @@ export function evaluateMainline(
     windows,
     verdict,
     headline: `${VERDICT_LABEL[verdict]}${formatLeader(primary)}`,
+    caution: formatAuxCaution(windows, primary),
     flowConfirmed,
   }
 }

@@ -737,6 +737,14 @@ tr:focus-visible {
   color: var(--text-mute);
 }
 
+/* 主辅窗分歧提示：不降级综合结论，但用琥珀色提醒分窗反证 */
+.insight-detail.caution {
+  margin-top: 4px;
+  color: var(--huijin);
+  white-space: normal;
+  line-height: 1.35;
+}
+
 .insight-value {
   margin: 3px 0;
   color: var(--text);

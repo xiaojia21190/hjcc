@@ -8,6 +8,7 @@ import {
   SECTOR_THRESHOLDS,
   VERDICT_LABEL,
   type FlowDirection,
+  type MainlineLeader,
   type MainlineReport,
 } from '../utils/mainlineSignals'
 
@@ -18,6 +19,15 @@ const props = withDefaults(
   }>(),
   { etfs: () => [], sectorTrend: null },
 )
+
+interface MainlinePanelView {
+  key: string
+  title: string
+  scope: string
+  report: MainlineReport | null
+  primaryLeader: MainlineLeader | null
+  empty: string
+}
 
 /** 各 ETF 最新一个估算点的份额流向，用作龙头资金确认。 */
 const styleFlows = computed(() => {
@@ -48,21 +58,38 @@ const sectorReport = computed<MainlineReport | null>(() =>
     : null,
 )
 
+function toPanel(
+  key: string,
+  title: string,
+  scope: string,
+  report: MainlineReport | null,
+  empty: string,
+): MainlinePanelView {
+  return {
+    key,
+    title,
+    scope,
+    report,
+    primaryLeader: report ? pickPrimaryWindow(report.windows)?.leader ?? null : null,
+    empty,
+  }
+}
+
 const panels = computed(() => [
-  {
-    key: 'style',
-    title: '风格主线',
-    scope: '6 只宽基 ETF · 大小盘与成长价值',
-    report: styleReport.value,
-    empty: '宽基净值序列不足',
-  },
-  {
-    key: 'sector',
-    title: '题材主线',
-    scope: '申万二级行业板块',
-    report: sectorReport.value,
-    empty: '快照中暂无行业板块数据',
-  },
+  toPanel(
+    'style',
+    '风格主线',
+    '6 只宽基 ETF · 大小盘与成长价值',
+    styleReport.value,
+    '宽基净值序列不足',
+  ),
+  toPanel(
+    'sector',
+    '题材主线',
+    '申万二级行业板块',
+    sectorReport.value,
+    '快照中暂无行业板块数据',
+  ),
 ])
 
 function pct(value: number | null, digits = 0): string {
@@ -114,14 +141,17 @@ function flowText(report: MainlineReport | null): string {
             <div class="insight-detail muted">
               以 20 日主观察窗为准 · {{ panel.report.categoryCount }} 个板块
             </div>
+            <div v-if="panel.report.caution" class="insight-detail caution">
+              辅窗：{{ panel.report.caution }}
+            </div>
           </div>
           <div class="insight-signal-item">
             <div class="insight-label">20 日龙头</div>
             <div class="insight-value mono">
-              {{ pickPrimaryWindow(panel.report.windows)?.leader?.categoryName ?? '—' }}
+              {{ panel.primaryLeader?.categoryName ?? '—' }}
             </div>
             <div class="insight-detail muted">
-              {{ signed(pickPrimaryWindow(panel.report.windows)?.leader?.returnPct) }} 区间累计
+              {{ signed(panel.primaryLeader?.returnPct) }} 区间累计
             </div>
           </div>
           <div class="insight-signal-item">
