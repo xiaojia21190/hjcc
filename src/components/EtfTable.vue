@@ -9,6 +9,13 @@ import {
   yuanToYi,
   changeClass,
 } from '../utils/format'
+import {
+  estimateRangeYi,
+  formatEstimateValueRange,
+  lowResolutionLabel,
+  estimateTooltip,
+  type EstimateRangeYi,
+} from '../utils/estimateDisplay'
 
 const props = defineProps<{
   etfs: EtfSnapshot[]
@@ -37,6 +44,7 @@ const rows = computed(() =>
     const trendPts = e.huijinEstimateHistory.filter((p) => p.shareTrend != null)
     const latestTrendPoint =
       trendPts.length > 0 ? trendPts[trendPts.length - 1] : null
+    const estRange: EstimateRangeYi | null = estimateRangeYi(latestAnchored)
     return {
       code: e.code,
       categoryOrder,
@@ -62,6 +70,7 @@ const rows = computed(() =>
           : null,
       hasHuijin: !!latestDisclosure,
       estValueYi: latestAnchored?.huijinValueYi ?? null,
+      estRange,
       estShareTrend: latestTrendPoint?.shareTrend ?? null,
       estConsecutiveDays: latestTrendPoint?.consecutiveDays ?? null,
       estChangePct5d: latestTrendPoint?.shareChangePct5d ?? null,
@@ -148,13 +157,16 @@ const visibleRows = computed(() => {
           <th>份额日期</th>
           <th class="num">基金总份额</th>
           <th class="num">净份额变化</th>
-          <th class="num" title="基于交易所总份额流向，供判断汇金方向参考，不代表汇金实际操作">份额趋势</th>
+          <th
+            class="num"
+            title="交易所总份额当日流向与近 5 日变化；不能识别持有人，不代表汇金操作"
+          >总份额流向</th>
           <th class="num">基金规模</th>
           <th>报告期</th>
           <th class="num">汇金份额</th>
           <th class="num">汇金占比</th>
           <th class="num">最近披露估值</th>
-          <th class="num">估算持仓</th>
+          <th class="num" title="展示值为区间加权；括号内为 floor~ceil">估算持仓</th>
         </tr>
       </thead>
       <tbody>
@@ -185,19 +197,19 @@ const visibleRows = computed(() => {
             class="num mono"
             :title="
               r.estShareTrend === 'inflow'
-                ? '连续净流入，汇金占比被动稀释减缓'
+                ? `当日总份额净流入${r.estConsecutiveDays && r.estConsecutiveDays > 1 ? ` · 连续 ${r.estConsecutiveDays} 日` : ''}；右侧为近 5 日累计变化`
                 : r.estShareTrend === 'outflow'
-                  ? '连续净流出，汇金占比被动上升'
+                  ? `当日总份额净流出${r.estConsecutiveDays && r.estConsecutiveDays > 1 ? ` · 连续 ${r.estConsecutiveDays} 日` : ''}；右侧为近 5 日累计变化`
                   : r.estChangePct5d != null
-                    ? '份额持平'
-                    : '无估算趋势'
+                    ? '当日总份额持平；右侧为近 5 日累计变化'
+                    : '无日频份额趋势'
             "
           >
             <template v-if="r.estShareTrend === 'inflow'">↑</template>
             <template v-else-if="r.estShareTrend === 'outflow'">↓</template>
             <template v-else>→</template>
             <span v-if="r.estConsecutiveDays && r.estShareTrend !== 'flat'">{{ r.estConsecutiveDays }}</span>
-            <span v-if="r.estChangePct5d != null" class="muted">{{ r.estChangePct5d > 0 ? '+' : '' }}{{ r.estChangePct5d }}%</span>
+            <span v-if="r.estChangePct5d != null" class="muted"> 5日{{ r.estChangePct5d > 0 ? '+' : '' }}{{ r.estChangePct5d }}%</span>
           </td>
           <td class="num mono" :title="r.netAssetEstimated ? '总份额 × 当日附近单位净值估算' : undefined">
             {{ r.netAssetEstimated ? '≈ ' : '' }}{{ formatYi(r.netAssetYi) }}
@@ -211,14 +223,16 @@ const visibleRows = computed(() => {
           </td>
           <td
             class="num mono"
-            :title="
-              r.estValueYi != null
-                ? '占比区间估算：下界份额变动全归因汇金，上界占比不变'
-                : undefined
-            "
+            :class="{ 'is-low-res': r.estRange?.lowResolution }"
+            :title="r.estRange ? estimateTooltip(r.estRange, r.estValueYi) : undefined"
           >
-            {{ r.estValueYi != null ? formatYi(r.estValueYi) : '—' }}
-            <span v-if="r.estValueYi != null" class="estimate-tag">估算</span>
+            {{ formatEstimateValueRange(r.estValueYi, r.estRange) }}
+            <span
+              v-if="r.estValueYi != null"
+              class="estimate-tag"
+              :class="{ warn: r.estRange?.lowResolution }"
+            >{{ r.estRange?.lowResolution ? '低分辨' : '估算' }}</span>
+            <span v-if="r.estRange?.lowResolution" class="muted low-res-hint">{{ lowResolutionLabel(r.estRange) }}</span>
           </td>
         </tr>
       </tbody>

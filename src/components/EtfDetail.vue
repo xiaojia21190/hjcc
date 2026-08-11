@@ -3,6 +3,12 @@ import { computed } from "vue";
 import type { EtfSnapshot } from "../../shared/types";
 import BaseChart from "./BaseChart.vue";
 import { formatPct, formatShares, formatYi, shortName, yuanToYi } from "../utils/format";
+import {
+  estimateRangeYi,
+  formatEstimateSharesRange,
+  formatEstimateValueRange,
+  lowResolutionLabel,
+} from "../utils/estimateDisplay";
 import type { EChartsCoreOption } from "echarts/core";
 
 const props = defineProps<{
@@ -21,6 +27,7 @@ const latestAnchored = computed(() => {
     ) ?? [];
   return pts.length > 0 ? pts[pts.length - 1] : null;
 });
+const latestEstimateRange = computed(() => estimateRangeYi(latestAnchored.value));
 
 const pieOption = computed<EChartsCoreOption>(() => {
   const holders = latestReport.value?.holders ?? [];
@@ -132,11 +139,17 @@ const pieOption = computed<EChartsCoreOption>(() => {
         </div>
         <div class="kpi">
           <div class="k">估算持仓（参考）</div>
-          <div class="v mono">
+          <div class="v mono" :class="{ 'is-low-res': latestEstimateRange?.lowResolution }">
             <template v-if="latestAnchored">
-              ≈ {{ formatYi(latestAnchored.huijinValueYi) }}
+              ≈ {{ formatEstimateValueRange(latestAnchored.huijinValueYi, latestEstimateRange) }}
             </template>
             <template v-else>待新披露</template>
+          </div>
+        </div>
+        <div class="kpi">
+          <div class="k">估算份额区间</div>
+          <div class="v mono" :class="{ 'is-low-res': latestEstimateRange?.lowResolution }">
+            {{ latestEstimateRange ? formatEstimateSharesRange(latestEstimateRange) : "待新披露" }}
           </div>
         </div>
         <div class="kpi">
@@ -148,7 +161,7 @@ const pieOption = computed<EChartsCoreOption>(() => {
         <div class="estimate-note">
           {{
             latestAnchored
-              ? `占比区间估算（${latestAnchored.date}）：下界假设份额变动全归因汇金，上界假设汇金占比不变，展示值取区间加权（下界 2/3 + 上界 1/3）`
+              ? `占比区间估算（${latestAnchored.date}）：展示值为下界 2/3 + 上界 1/3，非中值；下界=份额变动全归因汇金，上界=披露占比不变。${lowResolutionLabel(latestEstimateRange) ? lowResolutionLabel(latestEstimateRange) + "，点估计不可依赖。" : ""}`
               : "ETF 总份额变化不能识别持有人，无汇金披露锚点时不推算持仓"
           }}
         </div>

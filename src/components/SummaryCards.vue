@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import type { EtfSnapshot } from '../../shared/types'
 import { formatPct, formatShares, formatYi, yuanToYi } from '../utils/format'
+import { estimateRangeYi } from '../utils/estimateDisplay'
 import { aggregateShareSignals } from '../utils/signals'
 
 const props = defineProps<{
@@ -38,6 +39,8 @@ const cards = computed(() => {
     (sum, p) => sum + (p.huijinValueYi ?? 0),
     0,
   )
+  const lowResCount = latestAnchored.filter((p) => estimateRangeYi(p)?.lowResolution)
+    .length
   // 各 ETF 估算末日可能不同（如深交所 ETF 滞后），用日期区间如实标注合计口径
   const estDates = latestAnchored.map((p) => p.date).sort()
   const estDateMin = estDates[0] ?? null
@@ -48,12 +51,10 @@ const cards = computed(() => {
       : estDateMin === estDateMax
         ? estDateMin
         : `${estDateMin} ~ ${estDateMax}`
-  // 份额信号聚合：各 ETF 最新 anchored 点的趋势信号
+  // 总份额流向聚合：各 ETF 最新有 shareTrend 的日频点（不声称汇金操作）
   const signalPoints = props.etfs
     .map((etf) => {
-      const pts = etf.huijinEstimateHistory.filter(
-        (p) => p.estimateMethod === 'anchored',
-      )
+      const pts = etf.huijinEstimateHistory.filter((p) => p.shareTrend != null)
       const last = pts.length > 0 ? pts[pts.length - 1] : null
       if (!last || last.shareTrend == null) return null
       return {
@@ -65,6 +66,14 @@ const cards = computed(() => {
     })
     .filter((p): p is NonNullable<typeof p> => p != null)
   const signal = aggregateShareSignals(signalPoints)
+  const estimateSubParts = [
+    estDateLabel
+      ? `纳入 ${latestAnchored.length}/${props.etfs.length} 只 · 估算日 ${estDateLabel}`
+      : null,
+    '偏向下界加权（2/3+1/3），非中值',
+    lowResCount > 0 ? `${lowResCount} 只低分辨` : null,
+    '不代表实际持仓',
+  ].filter(Boolean)
   return [
     {
       label: '汇金最近披露合计估值',
@@ -75,12 +84,12 @@ const cards = computed(() => {
       accent: 'gold',
     },
     {
-      label: '份额信号（汇金方向参考）',
+      label: 'ETF 总份额流向',
       value: signal.headline,
       sub:
         [signal.highlightConsecutive, signal.highlightChange]
           .filter(Boolean)
-          .join(' · ') || '无汇金披露锚点，暂不生成信号',
+          .join(' · ') || '无日频份额序列，暂不生成信号',
       accent:
         signal.tone === 'inflow'
           ? 'teal'
@@ -97,12 +106,10 @@ const cards = computed(() => {
       accent: 'blue',
     },
     {
-      label: '汇金估算持仓（区间中值）',
+      label: '汇金估算持仓（加权点）',
       value: latestAnchored.length > 0 ? formatYi(estTotalYi) : '—',
-      sub: estDateLabel
-        ? `纳入 ${latestAnchored.length}/${props.etfs.length} 只 · 估算日 ${estDateLabel} · 仅供方向参考`
-        : '无估算锚点',
-      accent: 'orange',
+      sub: estimateSubParts.join(' · ') || '无估算锚点',
+      accent: lowResCount > 0 ? 'red' : 'orange',
     },
     {
       label: '汇金最近披露合计份额',

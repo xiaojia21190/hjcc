@@ -641,6 +641,20 @@ tr:focus-visible {
   color: #f07178;
 }
 
+/* 占比区间过宽：点估计不可依赖 */
+.data-table td.is-low-res,
+.detail .v.is-low-res {
+  color: #f0b429;
+}
+
+.low-res-hint {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  white-space: normal;
+  line-height: 1.3;
+}
+
 .detail-scale {
   margin: 2px 0 16px;
   padding: 12px;

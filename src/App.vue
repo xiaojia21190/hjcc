@@ -240,7 +240,7 @@ onMounted(reload)
             <div>
               <h2>汇金持仓趋势</h2>
               <p class="muted">
-                虚线为占比区间估算（仅供方向参考）；次轴细线为份额 5 日变化率，是判断汇金方向的主要信号
+                虚线为占比区间估算加权点（tooltip 含 floor~ceil，宽区间标低分辨）；次轴细线为 ETF 总份额 5 日变化率，不能识别持有人
               </p>
             </div>
             <div class="seg">

@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import type { EtfSnapshot, HuijinPosition, HuijinEstimatePoint } from '../../shared/types'
 import BaseChart from './BaseChart.vue'
 import type { EChartsCoreOption } from 'echarts/core'
+import { estimateRangeYi, formatEstimateSharesRange } from '../utils/estimateDisplay'
 
 const props = withDefaults(
   defineProps<{
@@ -28,6 +29,8 @@ interface SeriesItem {
   shareTrend?: 'inflow' | 'outflow' | 'flat'
   consecutiveDays?: number
   shareChangePct5d?: number | null
+  rangeLabel?: string | null
+  lowResolution?: boolean
 }
 
 function disclosedValue(h: HuijinPosition): number | null {
@@ -75,12 +78,15 @@ const option = computed<EChartsCoreOption>(() => {
       .map((p) => {
         const v = anchoredValue(p)
         if (v == null) return null
+        const range = estimateRangeYi(p)
         return {
           value: [p.date, v],
           estimated: true,
           shareTrend: p.shareTrend,
           consecutiveDays: p.consecutiveDays,
           shareChangePct5d: p.shareChangePct5d ?? null,
+          rangeLabel: range ? formatEstimateSharesRange(range) : null,
+          lowResolution: range?.lowResolution ?? false,
         } satisfies SeriesItem
       })
       .filter(Boolean) as SeriesItem[]
@@ -150,12 +156,14 @@ const option = computed<EChartsCoreOption>(() => {
           if (p.data?.estimated) {
             const d = p.data
             const parts: string[] = ['占比区间估算']
+            if (d.rangeLabel) parts.push(d.rangeLabel)
+            if (d.lowResolution) parts.push('低分辨')
             if (d.shareTrend && d.shareTrend !== 'flat' && d.consecutiveDays) {
-              const dir = d.shareTrend === 'inflow' ? '净流入' : '净流出'
+              const dir = d.shareTrend === 'inflow' ? '总份额净流入' : '总份额净流出'
               parts.push(`连续${d.consecutiveDays}日${dir}`)
             }
             if (d.shareChangePct5d != null) {
-              parts.push(`5日${d.shareChangePct5d > 0 ? '+' : ''}${d.shareChangePct5d}%`)
+              parts.push(`总份额5日${d.shareChangePct5d > 0 ? '+' : ''}${d.shareChangePct5d}%`)
             }
             suffix = ' · ' + parts.join(' / ')
           }
@@ -197,7 +205,7 @@ const option = computed<EChartsCoreOption>(() => {
 
 <template>
   <p v-if="hasVerifiedPoint" class="chart-note">
-    实点为基金年报/半年报「十大持有人」正式披露；最近披露期之后的虚线为占比区间估算（下界假设份额变动全归因汇金，上界假设汇金占比不变，展示值取区间加权）。次轴细线为近 5 日总份额变化率，用于判断份额流向。
+    实点为基金年报/半年报「十大持有人」正式披露；虚线为占比区间估算的加权展示点（下界 2/3 + 上界 1/3，非中值；tooltip 含 floor~ceil）。下界=份额变动全归因汇金，上界=披露占比不变。次轴细线为近 5 日<strong>ETF 总份额</strong>变化率，不能识别持有人，不代表汇金操作。
   </p>
   <p v-else class="chart-note">
     当前没有可验证的汇金持仓披露，暂不绘制持仓趋势。

@@ -36,7 +36,7 @@ interface MainlinePanelView {
   empty: string
 }
 
-/** 各 ETF 最新一个估算点的份额流向，用作龙头资金确认。 */
+/** 各 ETF 最新日频总份额流向，仅作风格主线旁证（不能识别持有人）。 */
 const styleFlows = computed(() => {
   const flows: Record<string, FlowDirection> = {}
   for (const etf of props.etfs) {
@@ -118,8 +118,8 @@ function corr(value: number | null): string {
 }
 
 function flowText(report: MainlineReport | null): string {
-  if (!report || report.flowConfirmed == null) return '无资金数据'
-  return report.flowConfirmed ? '龙头份额净流入' : '龙头份额未同向'
+  if (!report || report.flowConfirmed == null) return '无份额数据'
+  return report.flowConfirmed ? '龙头 ETF 总份额净流入' : '龙头 ETF 总份额未同向'
 }
 
 const ALIGNMENT_LABEL: Record<LeaderAlignmentStatus, string> = {
@@ -199,10 +199,10 @@ function windowLabel(row: MainlineWindowResult): string {
             </div>
           </div>
           <div class="insight-signal-item">
-            <div class="insight-label">资金确认</div>
+            <div class="insight-label">份额旁证</div>
             <div class="insight-value mono">{{ flowText(panel.report) }}</div>
             <div class="insight-detail muted">
-              截至 {{ panel.report.asOf ?? '—' }}
+              总份额流向 · 截至 {{ panel.report.asOf ?? '—' }}
             </div>
           </div>
         </div>

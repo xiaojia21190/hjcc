@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { DashboardData } from '../../shared/types'
+import { estimateRangeYi } from '../utils/estimateDisplay'
 
 const props = defineProps<{
   data: DashboardData
@@ -36,6 +37,12 @@ const items = computed(() => {
   const anchoredEtfs = etfs.filter((etf) =>
     etf.huijinEstimateHistory.some((p) => p.estimateMethod === 'anchored'),
   )
+  const lowResEtfs = anchoredEtfs.filter((etf) => {
+    const last = [...etf.huijinEstimateHistory]
+      .reverse()
+      .find((p) => p.estimateMethod === 'anchored')
+    return estimateRangeYi(last)?.lowResolution
+  })
 
   return [
     {
@@ -69,16 +76,22 @@ const items = computed(() => {
     {
       label: '持仓估算',
       status:
-        anchoredEtfs.length > 0
-          ? '估算中'
-          : '未启用',
+        anchoredEtfs.length === 0
+          ? '未启用'
+          : lowResEtfs.length > 0
+            ? '部分低分辨'
+            : '估算中',
       detail:
-        anchoredEtfs.length > 0
-          ? `占比区间 ${anchoredEtfs.length}/${total} 只`
-          : '无汇金披露锚点，不生成估算',
-      tone: (anchoredEtfs.length > 0
-        ? 'ok'
-        : 'warn') as QualityTone,
+        anchoredEtfs.length === 0
+          ? '无汇金披露锚点，不生成估算'
+          : lowResEtfs.length > 0
+            ? `占比区间 ${anchoredEtfs.length}/${total} 只 · ${lowResEtfs.length} 只区间过宽（≥30% 总份额）`
+            : `占比区间 ${anchoredEtfs.length}/${total} 只 · 点估计可用`,
+      tone: (anchoredEtfs.length === 0
+        ? 'warn'
+        : lowResEtfs.length > 0
+          ? 'partial'
+          : 'ok') as QualityTone,
     },
   ]
 })
