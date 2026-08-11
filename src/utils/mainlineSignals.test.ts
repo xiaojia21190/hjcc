@@ -1,5 +1,9 @@
 import { describe, expect, test } from 'bun:test'
-import { evaluateMainline, type CategoryNavSeries } from './mainlineSignals'
+import {
+  evaluateMainline,
+  sortWindowsForDisplay,
+  type CategoryNavSeries,
+} from './mainlineSignals'
 
 const CATEGORIES = ['c0', 'c1', 'c2', 'c3', 'c4', 'c5']
 const TOTAL_DAYS = 200
@@ -190,6 +194,17 @@ describe('evaluateMainline · 辅窗分歧 caution', () => {
     expect(report.verdict).toBe('none')
     expect(report.caution).toContain('5日有主线')
     expect(report.caution).toContain('未计入综合')
+  })
+})
+
+describe('sortWindowsForDisplay', () => {
+  test('主观察窗置顶，其余按窗口从长到短', () => {
+    const series = buildSeries((ci, day) => (ci === 0 ? 0.004 : 0.001))
+    const report = evaluateMainline(series, { windows: [5, 20, 60] })
+    const ordered = sortWindowsForDisplay(report.windows).map((w) => w.window)
+    expect(ordered).toEqual([20, 60, 5])
+    // 计算序仍保持入参顺序，展示排序不回写
+    expect(report.windows.map((w) => w.window)).toEqual([5, 20, 60])
   })
 })
 

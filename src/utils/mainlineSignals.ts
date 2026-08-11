@@ -244,6 +244,22 @@ export function pickPrimaryWindow(
 }
 
 /**
+ * 分窗表展示顺序：主观察窗置顶，其余按窗口从长到短（60 → 5），
+ * 让扫读先落在综合口径，高噪声短窗沉底。不改 evaluate 计算顺序。
+ */
+export function sortWindowsForDisplay(
+  windows: MainlineWindowResult[],
+): MainlineWindowResult[] {
+  const primaryWindow = pickPrimaryWindow(windows)?.window
+  return [...windows].sort((a, b) => {
+    const aPrimary = a.window === primaryWindow ? 0 : 1
+    const bPrimary = b.window === primaryWindow ? 0 : 1
+    if (aPrimary !== bPrimary) return aPrimary - bPrimary
+    return b.window - a.window
+  })
+}
+
+/**
  * 综合结论取主观察窗判定。
  * 不再对 5/20/60 取最弱：短窗 Spearman 噪声大，取 min 会把综合 mainline
  * 触发率压到近 0，且与 calibrate 的 20 日口径错位。5/60 仅作分窗对照。

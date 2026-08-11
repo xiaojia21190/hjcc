@@ -5,8 +5,10 @@ import {
   evaluateMainline,
   leaderRoleLabel,
   pickPrimaryWindow,
+  PRIMARY_WINDOW,
   sectorTrendToSeries,
   SECTOR_THRESHOLDS,
+  sortWindowsForDisplay,
   VERDICT_LABEL,
   type FlowDirection,
   type LeaderAlignmentStatus,
@@ -29,6 +31,8 @@ interface MainlinePanelView {
   scope: string
   report: MainlineReport | null
   primaryLeader: MainlineLeader | null
+  /** 主窗置顶、长窗在前的展示序；与 report.windows 计算序解耦。 */
+  displayWindows: MainlineWindowResult[]
   empty: string
 }
 
@@ -74,6 +78,7 @@ function toPanel(
     scope,
     report,
     primaryLeader: report ? pickPrimaryWindow(report.windows)?.leader ?? null : null,
+    displayWindows: report ? sortWindowsForDisplay(report.windows) : [],
     empty,
   }
 }
@@ -134,8 +139,14 @@ function isNoisyWindow(row: MainlineWindowResult): boolean {
   return row.window <= 5
 }
 
+function isPrimaryWindow(row: MainlineWindowResult): boolean {
+  return row.window === PRIMARY_WINDOW
+}
+
 function windowLabel(row: MainlineWindowResult): string {
-  return isNoisyWindow(row) ? `${row.window} 日 · 高噪声` : `${row.window} 日`
+  if (isPrimaryWindow(row)) return `${row.window} 日 · 主窗`
+  if (isNoisyWindow(row)) return `${row.window} 日 · 高噪声`
+  return `${row.window} 日`
 }
 </script>
 
@@ -210,9 +221,13 @@ function windowLabel(row: MainlineWindowResult): string {
             </thead>
             <tbody>
               <tr
-                v-for="row in panel.report.windows"
+                v-for="row in panel.displayWindows"
                 :key="row.window"
-                :class="{ 'is-noisy-window': isNoisyWindow(row) }"
+                :class="{
+                  'is-primary-window': isPrimaryWindow(row),
+                  'is-noisy-window': isNoisyWindow(row),
+                }"
+                :title="row.reason"
               >
                 <td class="mono">{{ windowLabel(row) }}</td>
                 <td>{{ VERDICT_LABEL[row.verdict] }}</td>

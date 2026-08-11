@@ -745,6 +745,16 @@ tr:focus-visible {
   line-height: 1.35;
 }
 
+/* 主观察窗行：与综合结论口径对齐，扫读优先 */
+.insight-table tr.is-primary-window td {
+  background: rgba(61, 156, 240, 0.08);
+}
+
+.insight-table tr.is-primary-window td:first-child {
+  color: var(--text);
+  font-weight: 600;
+}
+
 /* 5 日等高噪声辅窗：降权展示，仍保留数值供对照 */
 .insight-table tr.is-noisy-window td {
   color: var(--text-mute);
