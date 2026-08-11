@@ -8,11 +8,11 @@
     "calibrate": "bun run scripts/calibrate-mainline.ts",
     "build": "vue-tsc -b && vite build",
     "preview": "vite preview",
-    "fetch": "bun run scripts/fetch-data.ts",
-    "server": "bun run server/index.ts",
+    "dev:fetch": "bun run scripts/fetch-data.ts",
     "dev:server": "bun run server/index.ts",
     "dev:vite": "vite",
-    "dev": "concurrently -n fetch,server,vite -c red,blue,green \"bun run fetch\" \"bun run dev:server\" \"bun run dev:vite\"",
+    "dev": "concurrently -n fetch,server,vite -c red,blue,green \"bun run dev:fetch\" \"bun run dev:server\" \"bun run dev:vite\"",
+    "dev:node": "concurrently -n fetch,server,vite -c red,blue,green \"npm run scripts/fetch-data.ts\" \"npm run server/index.ts\" \"vite\"",
     "start": "bun run dev"
   },
   "dependencies": {
