@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-08-12T01:10:57.810Z",
+  "updatedAt": "2026-08-12T09:54:56.933Z",
   "categories": [
     {
       "id": "sse50",
@@ -97,15 +97,15 @@
       "category": "sse50",
       "categoryName": "上证50",
       "code": "510050",
-      "name": "上证50ETF华夏",
+      "name": "上证50ETF",
       "market": "SH",
       "quote": {
         "code": "510050",
-        "name": "上证50ETF华夏",
+        "name": "上证50ETF",
         "price": null,
         "changePct": null,
-        "marketCap": 21718720259,
-        "floatCap": 21718720259,
+        "marketCap": 19698000000,
+        "floatCap": null,
         "market": "SH"
       },
       "isLargest": true,
@@ -28204,25 +28204,25 @@
         "scale": "上交所/深交所 ETF 规模（每日总份额）+ 天天基金 FundArchivesDatas type=gmbd（定期净资产）",
         "quote": "东方财富 push2 / push2delay clist 完整分页（按 ETF 总市值选取）",
         "huijinEstimate": "占比区间口径：下界从最近披露汇金份额起逐日累加交易所总份额净变化（份额变动全归因汇金）；上界维持最近披露汇金占比不变（被动等比例稀释）；展示值取区间加权（下界 2/3 + 上界 1/3）。趋势信号（份额流向、连续天数、5 日变化率）供方向参考。估算不代表汇金实际持仓。",
-        "holdersFromCache": false,
+        "holdersFromCache": true,
         "holdersHistoryDeduplicated": true,
         "holdersFetchedAt": "2026-08-12T01:09:46.110Z",
-        "fetchedAt": "2026-08-12T01:09:46.110Z"
+        "fetchedAt": "2026-08-12T09:52:13.262Z"
       }
     },
     {
       "category": "csi300",
       "categoryName": "沪深300",
       "code": "510300",
-      "name": "沪深300ETF华泰柏瑞",
+      "name": "沪深300ETF",
       "market": "SH",
       "quote": {
         "code": "510300",
-        "name": "沪深300ETF华泰柏瑞",
+        "name": "沪深300ETF",
         "price": null,
         "changePct": null,
-        "marketCap": 117369232454,
-        "floatCap": 117369232454,
+        "marketCap": 94872000000,
+        "floatCap": null,
         "market": "SH"
       },
       "isLargest": true,
@@ -55881,25 +55881,25 @@
         "scale": "上交所/深交所 ETF 规模（每日总份额）+ 天天基金 FundArchivesDatas type=gmbd（定期净资产）",
         "quote": "东方财富 push2 / push2delay clist 完整分页（按 ETF 总市值选取）",
         "huijinEstimate": "占比区间口径：下界从最近披露汇金份额起逐日累加交易所总份额净变化（份额变动全归因汇金）；上界维持最近披露汇金占比不变（被动等比例稀释）；展示值取区间加权（下界 2/3 + 上界 1/3）。趋势信号（份额流向、连续天数、5 日变化率）供方向参考。估算不代表汇金实际持仓。",
-        "holdersFromCache": false,
+        "holdersFromCache": true,
         "holdersHistoryDeduplicated": true,
         "holdersFetchedAt": "2026-08-12T01:10:00.445Z",
-        "fetchedAt": "2026-08-12T01:10:00.445Z"
+        "fetchedAt": "2026-08-12T09:52:44.184Z"
       }
     },
     {
       "category": "csi500",
       "categoryName": "中证500",
       "code": "510500",
-      "name": "中证500ETF南方",
+      "name": "中证500ETF",
       "market": "SH",
       "quote": {
         "code": "510500",
-        "name": "中证500ETF南方",
+        "name": "中证500ETF",
         "price": null,
         "changePct": null,
-        "marketCap": 42496436576,
-        "floatCap": 42496436576,
+        "marketCap": 38087000000,
+        "floatCap": null,
         "market": "SH"
       },
       "isLargest": true,
@@ -83304,25 +83304,25 @@
         "scale": "上交所/深交所 ETF 规模（每日总份额）+ 天天基金 FundArchivesDatas type=gmbd（定期净资产）",
         "quote": "东方财富 push2 / push2delay clist 完整分页（按 ETF 总市值选取）",
         "huijinEstimate": "占比区间口径：下界从最近披露汇金份额起逐日累加交易所总份额净变化（份额变动全归因汇金）；上界维持最近披露汇金占比不变（被动等比例稀释）；展示值取区间加权（下界 2/3 + 上界 1/3）。趋势信号（份额流向、连续天数、5 日变化率）供方向参考。估算不代表汇金实际持仓。",
-        "holdersFromCache": false,
+        "holdersFromCache": true,
         "holdersHistoryDeduplicated": true,
         "holdersFetchedAt": "2026-08-12T01:10:14.604Z",
-        "fetchedAt": "2026-08-12T01:10:14.604Z"
+        "fetchedAt": "2026-08-12T09:53:18.225Z"
       }
     },
     {
       "category": "csi1000",
       "categoryName": "中证1000",
       "code": "512100",
-      "name": "中证1000ETF南方",
+      "name": "中证1000ETF",
       "market": "SH",
       "quote": {
         "code": "512100",
-        "name": "中证1000ETF南方",
+        "name": "中证1000ETF",
         "price": null,
         "changePct": null,
-        "marketCap": 24333559112,
-        "floatCap": 24333559112,
+        "marketCap": 10961000000,
+        "floatCap": null,
         "market": "SH"
       },
       "isLargest": true,
@@ -110365,25 +110365,25 @@
         "scale": "上交所/深交所 ETF 规模（每日总份额）+ 天天基金 FundArchivesDatas type=gmbd（定期净资产）",
         "quote": "东方财富 push2 / push2delay clist 完整分页（按 ETF 总市值选取）",
         "huijinEstimate": "占比区间口径：下界从最近披露汇金份额起逐日累加交易所总份额净变化（份额变动全归因汇金）；上界维持最近披露汇金占比不变（被动等比例稀释）；展示值取区间加权（下界 2/3 + 上界 1/3）。趋势信号（份额流向、连续天数、5 日变化率）供方向参考。估算不代表汇金实际持仓。",
-        "holdersFromCache": false,
+        "holdersFromCache": true,
         "holdersHistoryDeduplicated": true,
         "holdersFetchedAt": "2026-08-12T01:10:29.088Z",
-        "fetchedAt": "2026-08-12T01:10:29.088Z"
+        "fetchedAt": "2026-08-12T09:53:53.167Z"
       }
     },
     {
       "category": "chinext",
       "categoryName": "创业板",
       "code": "159915",
-      "name": "创业板ETF易方达",
+      "name": "创业板ETF",
       "market": "SZ",
       "quote": {
         "code": "159915",
-        "name": "创业板ETF易方达",
+        "name": "创业板ETF",
         "price": null,
         "changePct": null,
-        "marketCap": 64766976989,
-        "floatCap": 64766976989,
+        "marketCap": 46868000000,
+        "floatCap": null,
         "market": "SZ"
       },
       "isLargest": true,
@@ -138812,10 +138812,10 @@
         "scale": "上交所/深交所 ETF 规模（每日总份额）+ 天天基金 FundArchivesDatas type=gmbd（定期净资产）",
         "quote": "东方财富 push2 / push2delay clist 完整分页（按 ETF 总市值选取）",
         "huijinEstimate": "占比区间口径：下界从最近披露汇金份额起逐日累加交易所总份额净变化（份额变动全归因汇金）；上界维持最近披露汇金占比不变（被动等比例稀释）；展示值取区间加权（下界 2/3 + 上界 1/3）。趋势信号（份额流向、连续天数、5 日变化率）供方向参考。估算不代表汇金实际持仓。",
-        "holdersFromCache": false,
+        "holdersFromCache": true,
         "holdersHistoryDeduplicated": true,
         "holdersFetchedAt": "2026-08-12T01:10:43.404Z",
-        "fetchedAt": "2026-08-12T01:10:43.404Z"
+        "fetchedAt": "2026-08-12T09:54:24.875Z"
       }
     },
     {
@@ -138827,10 +138827,10 @@
       "quote": {
         "code": "588000",
         "name": "科创50ETF华夏",
-        "price": null,
-        "changePct": null,
-        "marketCap": 89152590697,
-        "floatCap": 89152590697,
+        "price": 1.833,
+        "changePct": 1.5,
+        "marketCap": 90485436737,
+        "floatCap": 90485436737,
         "market": "SH"
       },
       "isLargest": true,
@@ -164120,10 +164120,10 @@
         "scale": "上交所/深交所 ETF 规模（每日总份额）+ 天天基金 FundArchivesDatas type=gmbd（定期净资产）",
         "quote": "东方财富 push2 / push2delay clist 完整分页（按 ETF 总市值选取）",
         "huijinEstimate": "占比区间口径：下界从最近披露汇金份额起逐日累加交易所总份额净变化（份额变动全归因汇金）；上界维持最近披露汇金占比不变（被动等比例稀释）；展示值取区间加权（下界 2/3 + 上界 1/3）。趋势信号（份额流向、连续天数、5 日变化率）供方向参考。估算不代表汇金实际持仓。",
-        "holdersFromCache": false,
+        "holdersFromCache": true,
         "holdersHistoryDeduplicated": true,
         "holdersFetchedAt": "2026-08-12T01:10:57.502Z",
-        "fetchedAt": "2026-08-12T01:10:57.502Z"
+        "fetchedAt": "2026-08-12T09:54:56.633Z"
       }
     }
   ],
@@ -183825,6 +183825,13 @@
       "marketIndex": 6009.53,
       "marketAmountYi": 25231.03,
       "referenceMaYi": 25654.55
+    },
+    {
+      "date": "2026-08-12",
+      "activeCapYi": 25204.15,
+      "marketIndex": 6024.05,
+      "marketAmountYi": 21524.23,
+      "referenceMaYi": 25669.56
     }
   ],
   "marketActiveCapSource": "指南针 0AMV（活筹指数）公开近似公式：SMA(沪深两市成交额,10,1) × 中证全指收盘 / 前5日中证全指均值；价格代理来自东方财富中证全指 000985，成交额为上证综指 000001 与深证成指 399001 日成交额之和。指南针原版算法未公开，本序列用于观察方向和趋势，不等同于 ETF 份额、基金净资产或官方 0AMV 绝对值。",
@@ -228070,8 +228077,8 @@
   },
   "summary": {
     "totalHuijinMarketValue": 732702711773.5,
-    "latestActiveCapYi": 25815.83,
-    "latestActiveCapDate": "2026-08-10",
+    "latestActiveCapYi": 25204.15,
+    "latestActiveCapDate": "2026-08-12",
     "etfCount": 6,
     "latestReportDate": "2025-12-31"
   }
