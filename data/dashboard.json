@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-08-11T04:26:37.030Z",
+  "updatedAt": "2026-08-12T01:10:57.810Z",
   "categories": [
     {
       "id": "sse50",
@@ -102,10 +102,10 @@
       "quote": {
         "code": "510050",
         "name": "上证50ETF华夏",
-        "price": 3.066,
-        "changePct": -0.29,
-        "marketCap": 20783086152,
-        "floatCap": 20783086152,
+        "price": null,
+        "changePct": null,
+        "marketCap": 21718720259,
+        "floatCap": 21718720259,
         "market": "SH"
       },
       "isLargest": true,
@@ -8582,15 +8582,21 @@
           "frequency": "daily",
           "shareSource": "sse",
           "netAssetEstimated": true
+        },
+        {
+          "date": "2026-08-11",
+          "totalSharesYi": 71.466668,
+          "purchaseYi": null,
+          "redeemYi": null,
+          "netSubscriptionYi": 3.681,
+          "netAssetYi": 217.087151,
+          "netAssetChangePct": null,
+          "frequency": "daily",
+          "shareSource": "sse",
+          "netAssetEstimated": true
         }
       ],
       "navHistory": [
-        {
-          "date": "2020-01-07",
-          "nav": 3.067,
-          "accNav": 4.216,
-          "changePct": 0.56
-        },
         {
           "date": "2020-01-08",
           "nav": 3.031,
@@ -18184,6 +18190,12 @@
           "nav": 3.0762,
           "accNav": 4.5853,
           "changePct": 0.24
+        },
+        {
+          "date": "2026-08-11",
+          "nav": 3.0376,
+          "accNav": 4.5396,
+          "changePct": -1.25
         }
       ],
       "holderReports": [
@@ -28170,6 +28182,21 @@
           "shareTrend": "outflow",
           "consecutiveDays": 5,
           "shareChangePct5d": -11.71
+        },
+        {
+          "date": "2026-08-11",
+          "netAssetYi": 217.087151,
+          "totalSharesYi": 71.466668,
+          "huijinShares": 2613902260,
+          "huijinValueYi": 79.3999,
+          "huijinPct": 36.58,
+          "huijinSharesFloor": 8.46,
+          "huijinSharesCeil": 61.497068,
+          "isEstimated": true,
+          "estimateMethod": "anchored",
+          "shareTrend": "inflow",
+          "consecutiveDays": 1,
+          "shareChangePct5d": -6.4
         }
       ],
       "source": {
@@ -28177,10 +28204,10 @@
         "scale": "上交所/深交所 ETF 规模（每日总份额）+ 天天基金 FundArchivesDatas type=gmbd（定期净资产）",
         "quote": "东方财富 push2 / push2delay clist 完整分页（按 ETF 总市值选取）",
         "huijinEstimate": "占比区间口径：下界从最近披露汇金份额起逐日累加交易所总份额净变化（份额变动全归因汇金）；上界维持最近披露汇金占比不变（被动等比例稀释）；展示值取区间加权（下界 2/3 + 上界 1/3）。趋势信号（份额流向、连续天数、5 日变化率）供方向参考。估算不代表汇金实际持仓。",
-        "holdersFromCache": true,
+        "holdersFromCache": false,
         "holdersHistoryDeduplicated": true,
-        "holdersFetchedAt": "2026-08-11T01:59:17.804Z",
-        "fetchedAt": "2026-08-11T04:25:23.946Z"
+        "holdersFetchedAt": "2026-08-12T01:09:46.110Z",
+        "fetchedAt": "2026-08-12T01:09:46.110Z"
       }
     },
     {
@@ -28192,10 +28219,10 @@
       "quote": {
         "code": "510300",
         "name": "沪深300ETF华泰柏瑞",
-        "price": 4.766,
-        "changePct": 0.15,
-        "marketCap": 118488420025,
-        "floatCap": 118488420025,
+        "price": null,
+        "changePct": null,
+        "marketCap": 117369232454,
+        "floatCap": 117369232454,
         "market": "SH"
       },
       "isLargest": true,
@@ -36452,15 +36479,21 @@
           "frequency": "daily",
           "shareSource": "sse",
           "netAssetEstimated": true
+        },
+        {
+          "date": "2026-08-11",
+          "totalSharesYi": 248.242877,
+          "purchaseYi": null,
+          "redeemYi": null,
+          "netSubscriptionYi": -0.369,
+          "netAssetYi": 1173.146188,
+          "netAssetChangePct": null,
+          "frequency": "daily",
+          "shareSource": "sse",
+          "netAssetEstimated": true
         }
       ],
       "navHistory": [
-        {
-          "date": "2020-01-07",
-          "nav": 4.157,
-          "accNav": 1.6863,
-          "changePct": 0.75
-        },
         {
           "date": "2020-01-08",
           "nav": 4.1094,
@@ -46054,6 +46087,12 @@
           "nav": 4.7633,
           "accNav": 2.0934,
           "changePct": 0.16
+        },
+        {
+          "date": "2026-08-11",
+          "nav": 4.7258,
+          "accNav": 2.0795,
+          "changePct": -0.79
         }
       ],
       "holderReports": [
@@ -55820,6 +55859,21 @@
           "shareTrend": "outflow",
           "consecutiveDays": 5,
           "shareChangePct5d": -8.12
+        },
+        {
+          "date": "2026-08-11",
+          "netAssetYi": 1173.146188,
+          "totalSharesYi": 248.242877,
+          "huijinShares": 13186726834,
+          "huijinValueYi": 623.1783,
+          "huijinPct": 53.12,
+          "huijinSharesFloor": 95.078,
+          "huijinSharesCeil": 205.445805,
+          "isEstimated": true,
+          "estimateMethod": "anchored",
+          "shareTrend": "outflow",
+          "consecutiveDays": 6,
+          "shareChangePct5d": -6.43
         }
       ],
       "source": {
@@ -55829,8 +55883,8 @@
         "huijinEstimate": "占比区间口径：下界从最近披露汇金份额起逐日累加交易所总份额净变化（份额变动全归因汇金）；上界维持最近披露汇金占比不变（被动等比例稀释）；展示值取区间加权（下界 2/3 + 上界 1/3）。趋势信号（份额流向、连续天数、5 日变化率）供方向参考。估算不代表汇金实际持仓。",
         "holdersFromCache": false,
         "holdersHistoryDeduplicated": true,
-        "holdersFetchedAt": "2026-08-11T04:25:38.877Z",
-        "fetchedAt": "2026-08-11T04:25:38.877Z"
+        "holdersFetchedAt": "2026-08-12T01:10:00.445Z",
+        "fetchedAt": "2026-08-12T01:10:00.445Z"
       }
     },
     {
@@ -55842,10 +55896,10 @@
       "quote": {
         "code": "510500",
         "name": "中证500ETF南方",
-        "price": 8.07,
-        "changePct": 0.41,
-        "marketCap": 43304980408,
-        "floatCap": 43304980408,
+        "price": null,
+        "changePct": null,
+        "marketCap": 42496436576,
+        "floatCap": 42496436576,
         "market": "SH"
       },
       "isLargest": true,
@@ -63970,15 +64024,21 @@
           "frequency": "daily",
           "shareSource": "sse",
           "netAssetEstimated": true
+        },
+        {
+          "date": "2026-08-11",
+          "totalSharesYi": 53.193686,
+          "purchaseYi": null,
+          "redeemYi": null,
+          "netSubscriptionYi": -0.468,
+          "netAssetYi": 424.570724,
+          "netAssetChangePct": null,
+          "frequency": "daily",
+          "shareSource": "sse",
+          "netAssetEstimated": true
         }
       ],
       "navHistory": [
-        {
-          "date": "2020-01-07",
-          "nav": 5.9593,
-          "accNav": 1.6705,
-          "changePct": 1.21
-        },
         {
           "date": "2020-01-08",
           "nav": 5.8778,
@@ -73572,6 +73632,12 @@
           "nav": 8.0437,
           "accNav": 2.7076,
           "changePct": 0.63
+        },
+        {
+          "date": "2026-08-11",
+          "nav": 7.9816,
+          "accNav": 2.6876,
+          "changePct": -0.77
         }
       ],
       "holderReports": [
@@ -83216,6 +83282,21 @@
           "shareTrend": "outflow",
           "consecutiveDays": 5,
           "shareChangePct5d": -14.98
+        },
+        {
+          "date": "2026-08-11",
+          "netAssetYi": 424.570724,
+          "totalSharesYi": 53.193686,
+          "huijinShares": 2147059596,
+          "huijinValueYi": 171.3697,
+          "huijinPct": 40.36,
+          "huijinSharesFloor": 12.104,
+          "huijinSharesCeil": 40.203788,
+          "isEstimated": true,
+          "estimateMethod": "anchored",
+          "shareTrend": "outflow",
+          "consecutiveDays": 6,
+          "shareChangePct5d": -14.93
         }
       ],
       "source": {
@@ -83223,10 +83304,10 @@
         "scale": "上交所/深交所 ETF 规模（每日总份额）+ 天天基金 FundArchivesDatas type=gmbd（定期净资产）",
         "quote": "东方财富 push2 / push2delay clist 完整分页（按 ETF 总市值选取）",
         "huijinEstimate": "占比区间口径：下界从最近披露汇金份额起逐日累加交易所总份额净变化（份额变动全归因汇金）；上界维持最近披露汇金占比不变（被动等比例稀释）；展示值取区间加权（下界 2/3 + 上界 1/3）。趋势信号（份额流向、连续天数、5 日变化率）供方向参考。估算不代表汇金实际持仓。",
-        "holdersFromCache": true,
+        "holdersFromCache": false,
         "holdersHistoryDeduplicated": true,
-        "holdersFetchedAt": "2026-08-11T01:59:46.796Z",
-        "fetchedAt": "2026-08-11T04:25:53.077Z"
+        "holdersFetchedAt": "2026-08-12T01:10:14.604Z",
+        "fetchedAt": "2026-08-12T01:10:14.604Z"
       }
     },
     {
@@ -83238,10 +83319,10 @@
       "quote": {
         "code": "512100",
         "name": "中证1000ETF南方",
-        "price": 3.146,
-        "changePct": 0.54,
-        "marketCap": 28179406368,
-        "floatCap": 28179406368,
+        "price": null,
+        "changePct": null,
+        "marketCap": 24333559112,
+        "floatCap": 24333559112,
         "market": "SH"
       },
       "isLargest": true,
@@ -91190,15 +91271,21 @@
           "frequency": "daily",
           "shareSource": "sse",
           "netAssetEstimated": true
+        },
+        {
+          "date": "2026-08-11",
+          "totalSharesYi": 77.992176,
+          "purchaseYi": null,
+          "redeemYi": null,
+          "netSubscriptionYi": -2.3,
+          "netAssetYi": 243.312191,
+          "netAssetChangePct": null,
+          "frequency": "daily",
+          "shareSource": "sse",
+          "netAssetEstimated": true
         }
       ],
       "navHistory": [
-        {
-          "date": "2020-01-07",
-          "nav": 0.7506,
-          "accNav": 0.7506,
-          "changePct": 1.51
-        },
         {
           "date": "2020-01-08",
           "nav": 0.7405,
@@ -100792,6 +100879,12 @@
           "nav": 3.1328,
           "accNav": 1.1737,
           "changePct": 0.69
+        },
+        {
+          "date": "2026-08-11",
+          "nav": 3.1197,
+          "accNav": 1.1689,
+          "changePct": -0.42
         }
       ],
       "holderReports": [
@@ -110250,6 +110343,21 @@
           "shareTrend": "outflow",
           "consecutiveDays": 4,
           "shareChangePct5d": -31.62
+        },
+        {
+          "date": "2026-08-11",
+          "netAssetYi": 243.312191,
+          "totalSharesYi": 77.992176,
+          "huijinShares": 5484287924,
+          "huijinValueYi": 171.0933,
+          "huijinPct": 70.32,
+          "huijinSharesFloor": 48.56,
+          "huijinSharesCeil": 67.408638,
+          "isEstimated": true,
+          "estimateMethod": "anchored",
+          "shareTrend": "outflow",
+          "consecutiveDays": 5,
+          "shareChangePct5d": -36.34
         }
       ],
       "source": {
@@ -110257,10 +110365,10 @@
         "scale": "上交所/深交所 ETF 规模（每日总份额）+ 天天基金 FundArchivesDatas type=gmbd（定期净资产）",
         "quote": "东方财富 push2 / push2delay clist 完整分页（按 ETF 总市值选取）",
         "huijinEstimate": "占比区间口径：下界从最近披露汇金份额起逐日累加交易所总份额净变化（份额变动全归因汇金）；上界维持最近披露汇金占比不变（被动等比例稀释）；展示值取区间加权（下界 2/3 + 上界 1/3）。趋势信号（份额流向、连续天数、5 日变化率）供方向参考。估算不代表汇金实际持仓。",
-        "holdersFromCache": true,
+        "holdersFromCache": false,
         "holdersHistoryDeduplicated": true,
-        "holdersFetchedAt": "2026-08-11T02:00:01.489Z",
-        "fetchedAt": "2026-08-11T04:26:08.138Z"
+        "holdersFetchedAt": "2026-08-12T01:10:29.088Z",
+        "fetchedAt": "2026-08-12T01:10:29.088Z"
       }
     },
     {
@@ -110272,10 +110380,10 @@
       "quote": {
         "code": "159915",
         "name": "创业板ETF易方达",
-        "price": 3.602,
-        "changePct": 1.21,
-        "marketCap": 66905187054,
-        "floatCap": 66905187054,
+        "price": null,
+        "changePct": null,
+        "marketCap": 64766976989,
+        "floatCap": 64766976989,
         "market": "SZ"
       },
       "isLargest": true,
@@ -118917,15 +119025,21 @@
           "frequency": "daily",
           "shareSource": "szse",
           "netAssetEstimated": true
+        },
+        {
+          "date": "2026-08-11",
+          "totalSharesYi": 181.674549,
+          "purchaseYi": null,
+          "redeemYi": null,
+          "netSubscriptionYi": -4.07,
+          "netAssetYi": 648.287461,
+          "netAssetChangePct": null,
+          "frequency": "daily",
+          "shareSource": "szse",
+          "netAssetEstimated": true
         }
       ],
       "navHistory": [
-        {
-          "date": "2020-01-07",
-          "nav": 1.8212,
-          "accNav": 2.0863,
-          "changePct": 1.78
-        },
         {
           "date": "2020-01-08",
           "nav": 1.7919,
@@ -128519,6 +128633,12 @@
           "nav": 3.5564,
           "accNav": 4.0742,
           "changePct": -0.82
+        },
+        {
+          "date": "2026-08-11",
+          "nav": 3.5684,
+          "accNav": 4.0879,
+          "changePct": 0.34
         }
       ],
       "holderReports": [
@@ -138670,6 +138790,21 @@
           "shareTrend": "inflow",
           "consecutiveDays": 1,
           "shareChangePct5d": -8.77
+        },
+        {
+          "date": "2026-08-11",
+          "netAssetYi": 648.287461,
+          "totalSharesYi": 181.674549,
+          "huijinShares": 8669291961,
+          "huijinValueYi": 309.355,
+          "huijinPct": 47.72,
+          "huijinSharesFloor": 80.96,
+          "huijinSharesCeil": 98.158759,
+          "isEstimated": true,
+          "estimateMethod": "anchored",
+          "shareTrend": "outflow",
+          "consecutiveDays": 1,
+          "shareChangePct5d": -6.37
         }
       ],
       "source": {
@@ -138677,10 +138812,10 @@
         "scale": "上交所/深交所 ETF 规模（每日总份额）+ 天天基金 FundArchivesDatas type=gmbd（定期净资产）",
         "quote": "东方财富 push2 / push2delay clist 完整分页（按 ETF 总市值选取）",
         "huijinEstimate": "占比区间口径：下界从最近披露汇金份额起逐日累加交易所总份额净变化（份额变动全归因汇金）；上界维持最近披露汇金占比不变（被动等比例稀释）；展示值取区间加权（下界 2/3 + 上界 1/3）。趋势信号（份额流向、连续天数、5 日变化率）供方向参考。估算不代表汇金实际持仓。",
-        "holdersFromCache": true,
+        "holdersFromCache": false,
         "holdersHistoryDeduplicated": true,
-        "holdersFetchedAt": "2026-08-11T02:00:16.558Z",
-        "fetchedAt": "2026-08-11T04:26:22.469Z"
+        "holdersFetchedAt": "2026-08-12T01:10:43.404Z",
+        "fetchedAt": "2026-08-12T01:10:43.404Z"
       }
     },
     {
@@ -138692,10 +138827,10 @@
       "quote": {
         "code": "588000",
         "name": "科创50ETF华夏",
-        "price": 1.836,
-        "changePct": 0.05,
-        "marketCap": 91019090977,
-        "floatCap": 91019090977,
+        "price": null,
+        "changePct": null,
+        "marketCap": 89152590697,
+        "floatCap": 89152590697,
         "market": "SH"
       },
       "isLargest": true,
@@ -146442,6 +146577,18 @@
           "redeemYi": null,
           "netSubscriptionYi": 3.24,
           "netAssetYi": 909.447288,
+          "netAssetChangePct": null,
+          "frequency": "daily",
+          "shareSource": "sse",
+          "netAssetEstimated": true
+        },
+        {
+          "date": "2026-08-11",
+          "totalSharesYi": 493.646682,
+          "purchaseYi": null,
+          "redeemYi": null,
+          "netSubscriptionYi": -2.1,
+          "netAssetYi": 890.884167,
           "netAssetChangePct": null,
           "frequency": "daily",
           "shareSource": "sse",
@@ -154866,6 +155013,12 @@
           "nav": 1.8345,
           "accNav": 1.274,
           "changePct": -0.35
+        },
+        {
+          "date": "2026-08-11",
+          "nav": 1.8047,
+          "accNav": 1.2533,
+          "changePct": -1.62
         }
       ],
       "holderReports": [
@@ -163946,6 +164099,20 @@
           "shareTrend": "inflow",
           "consecutiveDays": 1,
           "shareChangePct5d": -7.92
+        },
+        {
+          "date": "2026-08-11",
+          "netAssetYi": 890.884167,
+          "totalSharesYi": 493.646682,
+          "huijinShares": null,
+          "huijinValueYi": null,
+          "huijinPct": null,
+          "isEstimated": false,
+          "estimateMethod": "unavailable",
+          "unavailableReason": "暂无汇金持仓披露",
+          "shareTrend": "outflow",
+          "consecutiveDays": 1,
+          "shareChangePct5d": -6.61
         }
       ],
       "source": {
@@ -163953,10 +164120,10 @@
         "scale": "上交所/深交所 ETF 规模（每日总份额）+ 天天基金 FundArchivesDatas type=gmbd（定期净资产）",
         "quote": "东方财富 push2 / push2delay clist 完整分页（按 ETF 总市值选取）",
         "huijinEstimate": "占比区间口径：下界从最近披露汇金份额起逐日累加交易所总份额净变化（份额变动全归因汇金）；上界维持最近披露汇金占比不变（被动等比例稀释）；展示值取区间加权（下界 2/3 + 上界 1/3）。趋势信号（份额流向、连续天数、5 日变化率）供方向参考。估算不代表汇金实际持仓。",
-        "holdersFromCache": true,
+        "holdersFromCache": false,
         "holdersHistoryDeduplicated": true,
-        "holdersFetchedAt": "2026-08-11T02:00:31.301Z",
-        "fetchedAt": "2026-08-11T04:26:36.732Z"
+        "holdersFetchedAt": "2026-08-12T01:10:57.502Z",
+        "fetchedAt": "2026-08-12T01:10:57.502Z"
       }
     }
   ],

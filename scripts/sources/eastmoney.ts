@@ -144,6 +144,32 @@ interface MarketBar {
 }
 
 export type { MarketBar }
+export {
+  appendLatestMarketActiveCapHistory,
+  fetchLatestMarketActiveCapHistory,
+  parseLatestMarketBar,
+} from './market-latest'
+
+/** 盘前行情可能返回 0；无效实时值沿用上次有效报价，避免污染页面快照。 */
+export function mergeQuoteWithPrevious(
+  current: EtfQuote,
+  previous?: EtfQuote | null,
+): EtfQuote {
+  const validPrice =
+    current.price != null && Number.isFinite(current.price) && current.price > 0
+  const previousPrice =
+    previous?.price != null &&
+    Number.isFinite(previous.price) &&
+    previous.price > 0
+      ? previous.price
+      : null
+  const previousChange = previousPrice == null ? null : previous?.changePct ?? null
+  return {
+    ...current,
+    price: validPrice ? current.price : previousPrice,
+    changePct: validPrice ? current.changePct : previousChange,
+  }
+}
 
 /**
  * 日线域名回退链。push2his 是主力，但该路径曾被东财按 `kline/get` 整体封禁
@@ -185,6 +211,60 @@ function parseKlines(json: MarketKlineResponse): MarketBar[] {
         Number.isFinite(bar.amount) &&
         bar.amount > 0,
     )
+}
+
+/** 将三条指数日线按公共日期合并并计算 0AMV 近似序列。 */
+export function buildMarketActiveCapHistory(
+  series: MarketBar[][],
+): MarketActiveCapPoint[] {
+  const [priceBars, shBars, szBars] = series
+  if (!priceBars || !shBars || !szBars) return []
+  const shByDate = new Map(shBars.map((bar) => [bar.date, bar]))
+  const szByDate = new Map(szBars.map((bar) => [bar.date, bar]))
+  const bars = priceBars
+    .map((priceBar) => {
+      const sh = shByDate.get(priceBar.date)
+      const sz = szByDate.get(priceBar.date)
+      if (!sh || !sz) return null
+      return {
+        date: priceBar.date,
+        close: priceBar.close,
+        amount: sh.amount + sz.amount,
+      }
+    })
+    .filter((bar): bar is MarketBar => bar != null && bar.amount > 0)
+
+  let smoothAmount = 0
+  const raw: Omit<MarketActiveCapPoint, 'referenceMaYi'>[] = []
+  for (let i = 0; i < bars.length; i++) {
+    const bar = bars[i]
+    smoothAmount = i === 0 ? bar.amount : (bar.amount + 9 * smoothAmount) / 10
+    if (i < 5) continue
+    const priorFiveClose = bars
+      .slice(i - 5, i)
+      .reduce((sum, item) => sum + item.close, 0) / 5
+    if (!Number.isFinite(priorFiveClose) || priorFiveClose <= 0) continue
+    raw.push({
+      date: bar.date,
+      activeCapYi: Number(
+        ((smoothAmount * bar.close) / priorFiveClose / 1e8).toFixed(2),
+      ),
+      marketIndex: Number(bar.close.toFixed(2)),
+      marketAmountYi: Number((bar.amount / 1e8).toFixed(2)),
+    })
+  }
+
+  return raw.map((point, index) => {
+    if (index < 4) return { ...point, referenceMaYi: null }
+    const referenceMaYi =
+      raw
+        .slice(index - 4, index + 1)
+        .reduce((sum, item) => sum + item.activeCapYi, 0) / 5
+    return {
+      ...point,
+      referenceMaYi: Number(referenceMaYi.toFixed(2)),
+    }
+  })
 }
 
 export async function fetchMarketBars(
@@ -268,54 +348,7 @@ export async function fetchMarketActiveCapHistory(): Promise<MarketActiveCapPoin
     if (series.length > 0) await sleep(MARKET_BAR_INTERVAL_MS)
     series.push(await fetchMarketBars(secid, referer))
   }
-  const [priceBars, shBars, szBars] = series
-  const shByDate = new Map(shBars.map((bar) => [bar.date, bar]))
-  const szByDate = new Map(szBars.map((bar) => [bar.date, bar]))
-  const bars = priceBars
-    .map((priceBar) => {
-      const sh = shByDate.get(priceBar.date)
-      const sz = szByDate.get(priceBar.date)
-      if (!sh || !sz) return null
-      return {
-        date: priceBar.date,
-        close: priceBar.close,
-        amount: sh.amount + sz.amount,
-      }
-    })
-    .filter((bar): bar is MarketBar => bar != null && bar.amount > 0)
-
-  let smoothAmount = 0
-  const raw: Omit<MarketActiveCapPoint, 'referenceMaYi'>[] = []
-  for (let i = 0; i < bars.length; i++) {
-    const bar = bars[i]
-    // 通达信 SMA(X, 10, 1)：Y = (X + 9 * Y') / 10。
-    smoothAmount = i === 0 ? bar.amount : (bar.amount + 9 * smoothAmount) / 10
-    if (i < 5) continue
-    const priorFiveClose = bars
-      .slice(i - 5, i)
-      .reduce((sum, item) => sum + item.close, 0) / 5
-    if (!Number.isFinite(priorFiveClose) || priorFiveClose <= 0) continue
-    raw.push({
-      date: bar.date,
-      activeCapYi: Number(
-        ((smoothAmount * bar.close) / priorFiveClose / 1e8).toFixed(2),
-      ),
-      marketIndex: Number(bar.close.toFixed(2)),
-      marketAmountYi: Number((bar.amount / 1e8).toFixed(2)),
-    })
-  }
-
-  return raw.map((point, index) => {
-    if (index < 4) return { ...point, referenceMaYi: null }
-    const referenceMaYi =
-      raw
-        .slice(index - 4, index + 1)
-        .reduce((sum, item) => sum + item.activeCapYi, 0) / 5
-    return {
-      ...point,
-      referenceMaYi: Number(referenceMaYi.toFixed(2)),
-    }
-  })
+  return buildMarketActiveCapHistory(series)
 }
 
 /** 候选代码单票行情（secid: 1=SH, 0=SZ） */

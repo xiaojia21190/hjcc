@@ -1,5 +1,15 @@
 import { test, expect } from 'bun:test'
-import { computeOfficialFetchDates } from '../shared/backfill-window'
+import * as backfillWindow from '../shared/backfill-window'
+
+const computeOfficialFetchDates = backfillWindow.computeOfficialFetchDates
+const mergeTradingDates = (
+  ...dateLists: string[][]
+): string[] => {
+  expect(typeof backfillWindow.mergeTradingDates).toBe('function')
+  return (backfillWindow.mergeTradingDates as (...lists: string[][]) => string[])(
+    ...dateLists,
+  )
+}
 
 const OVERLAP = 5
 
@@ -104,4 +114,13 @@ test('不传 backfillStart 时保持原有行为', () => {
   })
   expect(result[0]).toBe('2026-01-01')
   expect(result.at(-1)).toBe('2026-01-10')
+})
+
+test('交易日轴合并净值日期，补上 0AMV 缺失的最新交易日', () => {
+  expect(
+    mergeTradingDates(
+      ['2026-08-08', '2026-08-10'],
+      ['2026-08-07', '2026-08-10', '2026-08-11'],
+    ),
+  ).toEqual(['2026-08-07', '2026-08-08', '2026-08-10', '2026-08-11'])
 })

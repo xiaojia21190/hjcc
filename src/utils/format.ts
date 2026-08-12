@@ -31,6 +31,30 @@ export function formatDate(d: string | null | undefined): string {
   return d.slice(0, 10)
 }
 
+const BEIJING_DATE_TIME_FORMATTER = new Intl.DateTimeFormat('zh-CN-u-nu-latn', {
+  timeZone: 'Asia/Shanghai',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hourCycle: 'h23',
+})
+
+export function formatDateTime(d: string | null | undefined): string {
+  if (!d) return '—'
+  const date = new Date(d)
+  if (!Number.isFinite(date.getTime())) return '—'
+  const parts = Object.fromEntries(
+    BEIJING_DATE_TIME_FORMATTER.formatToParts(date).map(({ type, value }) => [
+      type,
+      value,
+    ]),
+  )
+  return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second}`
+}
+
 export function shortName(name: string): string {
   return name
     .replace(/交易型开放式指数证券投资基金/g, 'ETF')

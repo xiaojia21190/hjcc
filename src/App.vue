@@ -16,6 +16,7 @@ import EtfTable from './components/EtfTable.vue'
 import EtfDetail from './components/EtfDetail.vue'
 import DataQualityBar from './components/DataQualityBar.vue'
 import { downloadCsv } from './utils/csv'
+import { formatDateTime } from './utils/format'
 import { computeMacd } from './utils/macd'
 
 const data = ref<DashboardData | null>(null)
@@ -198,7 +199,7 @@ onMounted(reload)
       </div>
       <div class="actions">
         <span v-if="data?.updatedAt" class="pill">
-          数据更新 {{ data.updatedAt.replace('T', ' ').slice(0, 19) }}
+          数据更新 {{ formatDateTime(data.updatedAt) }}
         </span>
         <button class="btn ghost" :disabled="loading" @click="reload">
           重新加载

@@ -10,7 +10,10 @@ import type {
   EtfQuote,
   EtfSnapshot,
 } from '../shared/types'
-import { computeOfficialFetchDates } from '../shared/backfill-window'
+import {
+  computeOfficialFetchDates,
+  mergeTradingDates,
+} from '../shared/backfill-window'
 import { buildHuijinEstimate } from './lib/estimate'
 import {
   buildHuijinHistory,
@@ -21,9 +24,11 @@ import {
 import { formatCompletenessReport } from './lib/report'
 import {
   fetchEtfUniverse,
+  buildMarketActiveCapHistory,
   fetchMarketActiveCapHistory,
   fetchNavHistory,
   fetchScaleHistory,
+  mergeQuoteWithPrevious,
   pickLargestPerCategory,
 } from './sources/eastmoney'
 import { sleep } from './sources/http'
@@ -31,6 +36,8 @@ import { fetchSectorTrend } from './sources/sector'
 import { fetchAllHolderReports } from './sources/sina'
 import { fetchSseDailyShares, type OfficialDailySharePoint } from './sources/sse'
 import { fetchSzseDailyShares } from './sources/szse'
+import { fetchLatestMarketActiveCapHistory } from './sources/market-latest'
+import { fetchTushareMarketSeries } from './sources/tushare'
 
 const ROOT = join(import.meta.dir, '..')
 const DATA_DIR = join(ROOT, 'data')
@@ -291,13 +298,37 @@ async function main() {
     console.log(`发现上次快照 ${previous.updatedAt}，接口无有效报告时将保留该数据`)
   }
   console.log('抓取 ETF 全市场行情…')
-  const [universe, marketActiveCapFetched] = await Promise.all([
+  const [universeFetched, marketActiveCapFetched] = await Promise.all([
     fetchEtfUniverse(),
-    fetchMarketActiveCapHistory().catch((error) => {
-      console.warn('中证全指 0AMV 数据抓取失败，将尝试沿用上次快照', error)
+    fetchMarketActiveCapHistory().catch(async (error) => {
+      console.warn('中证全指 0AMV 日线抓取失败，尝试最新指数快照', error)
+      const tushareToken = process.env.TUSHARE_TOKEN?.trim()
+      const tushareFallbackEnabled = process.env.TUSHARE_FALLBACK === '1'
+      if (tushareToken && tushareFallbackEnabled) {
+        try {
+          console.log('尝试 Tushare index_daily 0AMV 备用数据源')
+          const history = buildMarketActiveCapHistory(
+            await fetchTushareMarketSeries(tushareToken),
+          )
+          if (history.length > 0) return history
+        } catch (tushareError) {
+          console.warn('Tushare 0AMV 备用数据源失败，继续尝试最新指数快照', tushareError)
+        }
+      }
+      try {
+        return await fetchLatestMarketActiveCapHistory(
+          previous?.marketActiveCapHistory ?? [],
+        )
+      } catch (fallbackError) {
+        console.warn('最新指数快照也失败，将沿用上次快照', fallbackError)
+      }
       return []
     }),
   ])
+  const previousQuotes = new Map(previous?.etfs.map((etf) => [etf.code, etf.quote]) ?? [])
+  const universe = universeFetched.map((quote) =>
+    mergeQuoteWithPrevious(quote, previousQuotes.get(quote.code)),
+  )
   const marketActiveCapHistory =
     marketActiveCapFetched.length > 0
       ? marketActiveCapFetched
@@ -324,7 +355,10 @@ async function main() {
     await fetchOfficialShareHistories(
       picked,
       previous,
-      marketActiveCapHistory.map((point) => point.date),
+      mergeTradingDates(
+        marketActiveCapHistory.map((point) => point.date),
+        previous?.etfs.flatMap((etf) => etf.navHistory.map((point) => point.date)) ?? [],
+      ),
     )
 
   const etfs: EtfSnapshot[] = []

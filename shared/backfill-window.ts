@@ -18,6 +18,13 @@ export interface ComputeFetchDatesArgs {
   backfillStart?: string
 }
 
+/** 合并多个交易日来源，避免单个行情源缺日截断官方份额抓取窗口。 */
+export function mergeTradingDates(...dateLists: string[][]): string[] {
+  return [...new Set(dateLists.flat())]
+    .filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date))
+    .sort()
+}
+
 export function computeOfficialFetchDates({
   existing,
   marketDates,

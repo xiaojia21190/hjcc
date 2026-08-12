@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import { fetchMarketBars } from './eastmoney'
+import { fetchMarketBars, mergeQuoteWithPrevious } from './eastmoney'
 
 /**
  * 东财 kline 响应字段序：date,open,close,high,low,成交量,成交额,换手率。
@@ -25,6 +25,30 @@ const originalFetch = globalThis.fetch
 
 afterEach(() => {
   globalThis.fetch = originalFetch
+})
+
+test('盘前无效报价沿用上次有效值', () => {
+  const result = mergeQuoteWithPrevious(
+    {
+      code: '510050', name: 'ETF', price: 0, changePct: 0,
+      marketCap: 1, floatCap: 1, market: 'SH',
+    },
+    {
+      code: '510050', name: 'ETF', price: 3.12, changePct: 1.2,
+      marketCap: 2, floatCap: 2, market: 'SH',
+    },
+  )
+  expect(result.price).toBe(3.12)
+  expect(result.changePct).toBe(1.2)
+})
+
+test('无效报价且无历史值时归一化为 null', () => {
+  const result = mergeQuoteWithPrevious({
+    code: '510050', name: 'ETF', price: 0, changePct: 0,
+    marketCap: 1, floatCap: 1, market: 'SH',
+  })
+  expect(result.price).toBeNull()
+  expect(result.changePct).toBeNull()
 })
 
 /**
