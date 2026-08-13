@@ -51,7 +51,11 @@ const styleReport = computed<MainlineReport>(() =>
     props.etfs.map((etf) => ({
       category: etf.category,
       categoryName: etf.categoryName,
-      points: etf.navHistory.map((point) => ({ date: point.date, nav: point.nav })),
+      // 主线比较使用累计净值，避免 ETF 分红日的普通净值除息下跌制造假信号。
+      points: etf.navHistory.map((point) => ({
+        date: point.date,
+        nav: point.accNav > 0 ? point.accNav : point.nav,
+      })),
     })),
     { flows: styleFlows.value },
   ),
@@ -256,11 +260,11 @@ function windowLabel(row: MainlineWindowResult): string {
       5 日半窗过短、秩相关噪声大，表中标为高噪声；窗口收益为负时领先板块称「相对最强」。
       「跨窗领先」比较 20 与 60 日领先板块是否同一，是 N 较小时对单窗 Spearman 的描述性旁证，不改综合结论。
       <br />
-      <strong>历史检验（风格口径）</strong>：2020-09 以来逐日回溯，判为「有主线」的样本，
-      其龙头在其后 20 日相对等权平均<strong>平均跑输 0.72%</strong>、跑赢率 49.1%，前视拉长到
-      120 日跑输扩大到约 4.3%；调高任何门槛都只会让跑输加剧。判为「有主线」后 20 日仍为
-      「有主线」的比例（23.2%）也低于无条件基础比例（约 26%）。
-      <strong>风格口径不具备已验证的预测能力，据此追逐宽基龙头在历史样本上是亏损的。</strong>
+      <strong>历史检验（风格口径）</strong>：2020-09 以来逐日回溯，使用 ETF 累计净值；判为「有主线」的样本，
+      其龙头在其后 20 日相对等权平均<strong>平均跑输 0.21%</strong>、跑赢率 47.1%，前视拉长到
+      120 日约跑输 1.9%；扫描门槛后仍无稳定转正组合。判为「有主线」后 20 日仍为
+      「有主线」的比例（24.8%）也低于无条件基础比例（约 27.1%）。
+      <strong>风格口径不具备已验证的预测能力，不应据此追逐宽基龙头。</strong>
       <br />
       <strong>历史检验（题材口径）</strong>：方向相反——判为「有主线」的样本其龙头此后 20 日
       平均约 +3.3%、跑赢率约 50%，而「轮动无主线」组约 -3.8%、24%。但可用行情仅 600 个

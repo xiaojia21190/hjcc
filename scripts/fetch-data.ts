@@ -9,6 +9,8 @@ import type {
   DashboardData,
   EtfQuote,
   EtfSnapshot,
+  MarketActiveCapPoint,
+  MarketActiveCapQuality,
 } from '../shared/types'
 import {
   computeOfficialFetchDates,
@@ -292,47 +294,107 @@ async function buildEtfSnapshot(
   }
 }
 
+interface MarketActiveCapResolution {
+  history: MarketActiveCapPoint[]
+  quality: MarketActiveCapQuality
+}
+
+async function resolveMarketActiveCapHistory(
+  previous: DashboardData | null,
+): Promise<MarketActiveCapResolution> {
+  const warnings: string[] = []
+
+  try {
+    const history = await fetchMarketActiveCapHistory()
+    if (history.length === 0) {
+      throw new Error('东方财富历史日线返回空的 0AMV 序列')
+    }
+    return {
+      history,
+      quality: {
+        source: 'eastmoney-history',
+        asOf: history.at(-1)?.date ?? null,
+        isPartial: false,
+        warning: null,
+      },
+    }
+  } catch (error) {
+    warnings.push('东方财富历史日线不可用')
+    console.warn('中证全指 0AMV 日线抓取失败，进入备用链', error)
+  }
+
+  const tushareToken = process.env.TUSHARE_TOKEN?.trim()
+  const tushareFallbackEnabled = process.env.TUSHARE_FALLBACK === '1'
+  if (tushareToken && tushareFallbackEnabled) {
+    try {
+      console.log('尝试 Tushare index_daily 0AMV 备用数据源')
+      const history = buildMarketActiveCapHistory(
+        await fetchTushareMarketSeries(tushareToken),
+      )
+      if (history.length === 0) {
+        throw new Error('Tushare 返回空的 0AMV 序列')
+      }
+      return {
+        history,
+        quality: {
+          source: 'tushare-history',
+          asOf: history.at(-1)?.date ?? null,
+          isPartial: false,
+          warning: warnings.join('；'),
+        },
+      }
+    } catch (error) {
+      warnings.push('Tushare 备用源不可用')
+      console.warn('Tushare 0AMV 备用数据源失败，继续尝试最新指数快照', error)
+    }
+  }
+
+  try {
+    const history = await fetchLatestMarketActiveCapHistory(
+      previous?.marketActiveCapHistory ?? [],
+    )
+    return {
+      history,
+      quality: {
+        source: 'latest-snapshot',
+        asOf: history.at(-1)?.date ?? null,
+        isPartial: true,
+        warning: warnings.join('；'),
+      },
+    }
+  } catch (error) {
+    warnings.push('最新指数快照不可用，沿用上次缓存')
+    console.warn('最新指数快照也失败，将沿用上次快照', error)
+  }
+
+  const history = previous?.marketActiveCapHistory ?? []
+  return {
+    history,
+    quality: {
+      source: 'cache',
+      asOf: history.at(-1)?.date ?? null,
+      isPartial: false,
+      warning: warnings.join('；'),
+    },
+  }
+}
+
 async function main() {
   const previous = await loadPreviousDashboard()
   if (previous) {
     console.log(`发现上次快照 ${previous.updatedAt}，接口无有效报告时将保留该数据`)
   }
   console.log('抓取 ETF 全市场行情…')
-  const [universeFetched, marketActiveCapFetched] = await Promise.all([
+  const [universeFetched, marketActiveCapResolution] = await Promise.all([
     fetchEtfUniverse(),
-    fetchMarketActiveCapHistory().catch(async (error) => {
-      console.warn('中证全指 0AMV 日线抓取失败，尝试最新指数快照', error)
-      const tushareToken = process.env.TUSHARE_TOKEN?.trim()
-      const tushareFallbackEnabled = process.env.TUSHARE_FALLBACK === '1'
-      if (tushareToken && tushareFallbackEnabled) {
-        try {
-          console.log('尝试 Tushare index_daily 0AMV 备用数据源')
-          const history = buildMarketActiveCapHistory(
-            await fetchTushareMarketSeries(tushareToken),
-          )
-          if (history.length > 0) return history
-        } catch (tushareError) {
-          console.warn('Tushare 0AMV 备用数据源失败，继续尝试最新指数快照', tushareError)
-        }
-      }
-      try {
-        return await fetchLatestMarketActiveCapHistory(
-          previous?.marketActiveCapHistory ?? [],
-        )
-      } catch (fallbackError) {
-        console.warn('最新指数快照也失败，将沿用上次快照', fallbackError)
-      }
-      return []
-    }),
+    resolveMarketActiveCapHistory(previous),
   ])
+  const marketActiveCapFetched = marketActiveCapResolution.history
   const previousQuotes = new Map(previous?.etfs.map((etf) => [etf.code, etf.quote]) ?? [])
   const universe = universeFetched.map((quote) =>
     mergeQuoteWithPrevious(quote, previousQuotes.get(quote.code)),
   )
-  const marketActiveCapHistory =
-    marketActiveCapFetched.length > 0
-      ? marketActiveCapFetched
-      : previous?.marketActiveCapHistory ?? []
+  const marketActiveCapHistory = marketActiveCapFetched
   console.log(`共 ${universe.length} 只 ETF`)
   console.log(`0AMV 市场日线 ${marketActiveCapHistory.length} 条`)
 
@@ -402,6 +464,7 @@ async function main() {
     marketActiveCapHistory,
     marketActiveCapSource:
       '指南针 0AMV（活筹指数）公开近似公式：SMA(沪深两市成交额,10,1) × 中证全指收盘 / 前5日中证全指均值；价格代理来自东方财富中证全指 000985，成交额为上证综指 000001 与深证成指 399001 日成交额之和。指南针原版算法未公开，本序列用于观察方向和趋势，不等同于 ETF 份额、基金净资产或官方 0AMV 绝对值。',
+    marketActiveCapQuality: marketActiveCapResolution.quality,
     sectorTrend,
     summary: {
       totalHuijinMarketValue: totalMv,

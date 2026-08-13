@@ -251,7 +251,10 @@ async function main() {
   const styleSeries = dashboard.etfs.map((etf) => ({
     category: etf.category,
     categoryName: etf.categoryName,
-    points: etf.navHistory.map((point) => ({ date: point.date, nav: point.nav })),
+    points: etf.navHistory.map((point) => ({
+      date: point.date,
+      nav: point.accNav > 0 ? point.accNav : point.nav,
+    })),
   }))
   const styleMatrix = alignSeries(styleSeries)
   if (styleMatrix) {

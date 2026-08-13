@@ -305,8 +305,8 @@ describe('evaluateMainline · 资金确认', () => {
     expect(evaluate({ c0: 'outflow' }).flowConfirmed).toBe(false)
   })
 
-  test('龙头无资金数据时不确认', () => {
-    expect(evaluate({ c1: 'inflow' }).flowConfirmed).toBe(false)
+  test('龙头无资金数据时返回未知', () => {
+    expect(evaluate({ c1: 'inflow' }).flowConfirmed).toBeNull()
   })
 
   test('未提供资金数据时为 null', () => {
@@ -329,6 +329,14 @@ describe('evaluateMainline · 数据不足', () => {
     })
     expect(report.windows[0].verdict).toBe('insufficient')
     expect(report.windows[0].reason).toContain('交易日不足')
+  })
+
+  test('历史分化度样本不足时不生成伪百分位', () => {
+    const report = evaluateMainline(buildSeries(() => 0.001, { days: 70 }), {
+      windows: [WINDOW],
+    })
+    expect(report.windows[0].verdict).toBe('insufficient')
+    expect(report.windows[0].reason).toContain('历史分化度样本不足')
   })
 
   test('空输入不抛异常', () => {

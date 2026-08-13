@@ -9,10 +9,40 @@ const props = defineProps<{
 
 type QualityTone = 'ok' | 'partial' | 'warn'
 
+function marketSourceLabel(source?: string): string {
+  switch (source) {
+    case 'eastmoney-history':
+      return '东财历史日线'
+    case 'tushare-history':
+      return 'Tushare 历史日线'
+    case 'latest-snapshot':
+      return '东财最新快照'
+    case 'cache':
+      return '上次缓存'
+    default:
+      return '旧快照（来源未记录）'
+  }
+}
+
 const items = computed(() => {
   const etfs = props.data.etfs
   const total = etfs.length
   const latestMarket = props.data.marketActiveCapHistory.at(-1)
+  const latestEtfDate = etfs
+    .map((etf) => etf.navHistory.at(-1)?.date)
+    .filter((date): date is string => !!date)
+    .sort()
+    .at(-1)
+  const latestSectorDate = props.data.sectorTrend?.dates.at(-1)
+  const latestReferenceDate = [latestEtfDate, latestSectorDate]
+    .filter((date): date is string => !!date)
+    .sort()
+    .at(-1)
+  const marketDateLag =
+    latestMarket != null &&
+    latestReferenceDate != null &&
+    latestMarket.date < latestReferenceDate
+  const marketQuality = props.data.marketActiveCapQuality
   const quoteCount = etfs.filter(
     (etf) => etf.quote?.price != null && etf.quote.marketCap != null,
   ).length
@@ -47,11 +77,28 @@ const items = computed(() => {
   return [
     {
       label: '0AMV 日线',
-      status: latestMarket ? '正常' : '缺失',
+      status: !latestMarket
+        ? '缺失'
+        : marketQuality?.isPartial
+          ? '临时快照'
+          : marketDateLag
+            ? '日期滞后'
+            : '正常',
       detail: latestMarket
-        ? `${latestMarket.date} · ${props.data.marketActiveCapHistory.length} 个交易日`
+        ? [
+            `${latestMarket.date} · ${props.data.marketActiveCapHistory.length} 个交易日`,
+            marketSourceLabel(marketQuality?.source),
+            marketDateLag ? `其他数据至 ${latestReferenceDate}` : null,
+            marketQuality?.warning,
+          ]
+            .filter((part): part is string => !!part)
+            .join(' · ')
         : '没有可用市场序列',
-      tone: (latestMarket ? 'ok' : 'warn') as QualityTone,
+      tone: (!latestMarket
+        ? 'warn'
+        : marketQuality?.isPartial || marketDateLag
+          ? 'partial'
+          : 'ok') as QualityTone,
     },
     {
       label: 'ETF 行情',

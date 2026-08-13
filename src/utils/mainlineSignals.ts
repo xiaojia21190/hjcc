@@ -65,6 +65,8 @@ export {
 
 /** 分化度分位数的回溯样本量，约两年交易日。 */
 const PERCENTILE_LOOKBACK = 480
+/** 至少保留一定历史样本，避免少数点位生成看似精确的百分位。 */
+const MIN_DISPERSION_HISTORY = 60
 
 interface VerdictInput {
   dispersionPercentile: number | null
@@ -149,6 +151,12 @@ export function evaluateWindow(
   const history = (options.dispersionHistory ?? dispersionSeries(matrix, window))
     .slice(Math.max(0, endIndex - PERCENTILE_LOOKBACK), endIndex)
     .filter((v): v is number => v != null)
+  if (history.length < MIN_DISPERSION_HISTORY) {
+    return emptyWindow(
+      window,
+      `历史分化度样本不足 ${MIN_DISPERSION_HISTORY} 个，无法稳定定位分位`,
+    )
+  }
 
   const leaderIndex = returns.indexOf(Math.max(...returns))
   const metrics: VerdictInput = {
@@ -191,10 +199,12 @@ export function evaluateMainline(
   )
   const primary = pickPrimaryWindow(windows)
   const verdict = combineVerdicts(windows)
+  const leaderFlow =
+    primary?.leader == null ? undefined : options.flows?.[primary.leader.category]
   const flowConfirmed =
-    options.flows == null || primary?.leader == null
+    options.flows == null || primary?.leader == null || leaderFlow == null
       ? null
-      : options.flows[primary.leader.category] === 'inflow'
+      : leaderFlow === 'inflow'
 
   return {
     asOf: matrix.dates[matrix.dates.length - 1],

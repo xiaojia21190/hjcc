@@ -125,6 +125,21 @@ export interface MarketActiveCapPoint {
   referenceMaYi: number | null
 }
 
+export type MarketActiveCapDataSource =
+  | 'eastmoney-history'
+  | 'tushare-history'
+  | 'latest-snapshot'
+  | 'cache'
+
+/** 0AMV 本次快照实际使用的数据源和完整性状态。 */
+export interface MarketActiveCapQuality {
+  source: MarketActiveCapDataSource
+  asOf: string | null
+  /** true 表示最后一个点来自盘中/最新快照，而非完整历史日线。 */
+  isPartial: boolean
+  warning: string | null
+}
+
 /** 持有人报告期事件；不是公告发布日期。 */
 export interface MarketReportEvent {
   date: string
@@ -193,6 +208,8 @@ export interface DashboardData {
   marketActiveCapHistory: MarketActiveCapPoint[]
   /** 0AMV 的定义、计算口径和数据来源说明。 */
   marketActiveCapSource: string
+  /** 0AMV 本次抓取实际使用的来源和截止日期；旧快照可能没有此字段。 */
+  marketActiveCapQuality?: MarketActiveCapQuality
   /** 行业板块日线矩阵；抓取失败时为 null，题材主线判定随之降级。 */
   sectorTrend: SectorTrendData | null
   summary: {

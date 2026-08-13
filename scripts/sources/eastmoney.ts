@@ -348,7 +348,11 @@ export async function fetchMarketActiveCapHistory(): Promise<MarketActiveCapPoin
     if (series.length > 0) await sleep(MARKET_BAR_INTERVAL_MS)
     series.push(await fetchMarketBars(secid, referer))
   }
-  return buildMarketActiveCapHistory(series)
+  const history = buildMarketActiveCapHistory(series)
+  if (history.length === 0) {
+    throw new Error('三条指数日线没有公共交易日，0AMV 序列为空')
+  }
+  return history
 }
 
 /** 候选代码单票行情（secid: 1=SH, 0=SZ） */
