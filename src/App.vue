@@ -1,8 +1,11 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import type { DashboardData, EtfSnapshot, MarketReportEvent } from '../shared/types'
 import {
+  DEFAULT_REFERENCE_DURATION_MS,
+  fetchRefreshStatus,
   loadDashboard,
+  MAX_WAIT_MS,
   refreshDashboard,
   supportsServerRefresh,
 } from './api/dashboard'
@@ -15,23 +18,28 @@ import ShareTrendChart from './components/ShareTrendChart.vue'
 import EtfTable from './components/EtfTable.vue'
 import EtfDetail from './components/EtfDetail.vue'
 import DataQualityBar from './components/DataQualityBar.vue'
-import { downloadCsv } from './utils/csv'
+import { downloadEtfCsv, downloadMarketCsv } from './utils/dashboardExport'
 import { formatDateTime } from './utils/format'
-import { computeMacd } from './utils/macd'
+import { waitForRefresh } from './utils/refreshWait'
 
 const data = ref<DashboardData | null>(null)
 const loading = ref(true)
 const error = ref('')
 const refreshing = ref(false)
+const progress = ref(0)
+const elapsedSec = ref(0)
+const toast = ref({ show: false, tone: 'ok' as 'ok' | 'error', text: '' })
 const selectedCode = ref('')
 const metric = ref<'percent' | 'shares' | 'value'>('percent')
 const shareMode = ref<'all' | 'single'>('all')
+let toastTimer: ReturnType<typeof setTimeout> | null = null
 
 const etfs = computed(() => data.value?.etfs ?? [])
 const selected = computed<EtfSnapshot | null>(() => {
   if (!selectedCode.value) return etfs.value[0] ?? null
   return etfs.value.find((e) => e.code === selectedCode.value) ?? null
 })
+const showProgress = computed(() => refreshing.value || (loading.value && data.value != null))
 
 const marketEvents = computed<MarketReportEvent[]>(() => {
   const byDate = new Map<string, string[]>()
@@ -51,128 +59,72 @@ const marketEvents = computed<MarketReportEvent[]>(() => {
     }))
 })
 
-function snapshotDate() {
-  return data.value?.updatedAt.slice(0, 10) ?? new Date().toISOString().slice(0, 10)
+function showToast(tone: 'ok' | 'error', text: string) {
+  toast.value = { show: true, tone, text }
+  if (toastTimer) clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => {
+    toast.value.show = false
+  }, tone === 'ok' ? 4000 : 6000)
 }
 
-function downloadEtfCsv() {
-  const rows = etfs.value.map((etf) => {
-    const scale = etf.scaleHistory.at(-1)
-    const anchoredPts = etf.huijinEstimateHistory.filter(
-      (p) => p.estimateMethod === 'anchored',
-    )
-    const latestAnchored = anchoredPts.at(-1) ?? null
-    return [
-      etf.categoryName,
-      etf.code,
-      etf.name,
-      etf.quote?.price,
-      etf.quote?.changePct,
-      scale?.date,
-      scale?.totalSharesYi,
-      scale?.netSubscriptionYi ??
-        (scale?.purchaseYi != null && scale.redeemYi != null
-          ? scale.purchaseYi - scale.redeemYi
-          : null),
-      scale?.netAssetYi,
-      etf.latestHuijin?.reportDate,
-      etf.latestHuijin?.shares,
-      etf.latestHuijin?.percent,
-      etf.latestHuijin?.marketValue != null
-        ? etf.latestHuijin.marketValue / 1e8
-        : null,
-      latestAnchored?.date ?? null,
-      latestAnchored?.huijinShares != null
-        ? latestAnchored.huijinShares / 1e8
-        : null,
-      latestAnchored?.huijinValueYi ?? null,
-      latestAnchored ? '估算' : '无锚点',
-    ]
-  })
-  downloadCsv(
-    `huijin-etf-snapshot-${snapshotDate()}.csv`,
-    [
-      '类别',
-      '代码',
-      '名称',
-      '现价',
-      '涨跌幅%',
-      '份额日期',
-      '总份额_亿份',
-      '净份额变化_亿份',
-      '净资产_亿元',
-      '汇金报告期',
-      '汇金份额',
-      '汇金占比%',
-      '最近披露汇金估值_亿元',
-      '估算日期',
-      '估算汇金份额_亿份',
-      '估算汇金估值_亿元',
-      '持仓状态',
-    ],
-    rows,
-  )
-}
-
-function downloadMarketCsv() {
-  const history = data.value?.marketActiveCapHistory ?? []
-  const macdPoints = computeMacd(history.map((point) => point.activeCapYi))
-  downloadCsv(
-    `market-0amv-${snapshotDate()}.csv`,
-    ['日期', '0AMV估算_亿元', '中证全指收盘', '沪深两市成交额_亿元', '5日参考线_亿元', 'DIF', 'DEA', 'MACD'],
-    history.map((point, index) => [
-      point.date,
-      point.activeCapYi,
-      point.marketIndex,
-      point.marketAmountYi,
-      point.referenceMaYi,
-      macdPoints[index]?.dif ?? '',
-      macdPoints[index]?.dea ?? '',
-      macdPoints[index]?.macd ?? '',
-    ]),
-  )
+function applyDashboard(next: DashboardData) {
+  data.value = next
+  if (!selectedCode.value && next.etfs[0]) selectedCode.value = next.etfs[0].code
 }
 
 async function reload() {
+  if (refreshing.value) return
+  const first = data.value == null
   loading.value = true
-  error.value = ''
+  if (first) error.value = ''
   try {
-    data.value = await loadDashboard()
-    if (!selectedCode.value && data.value.etfs[0]) {
-      selectedCode.value = data.value.etfs[0].code
-    }
+    applyDashboard(await loadDashboard())
+    error.value = ''
   } catch (e) {
-    error.value = e instanceof Error ? e.message : String(e)
+    const message = e instanceof Error ? e.message : String(e)
+    if (first) error.value = message
+    else showToast('error', message)
   } finally {
     loading.value = false
   }
 }
 
 async function onRefresh() {
+  if (refreshing.value) return
   refreshing.value = true
+  elapsedSec.value = 0
+  progress.value = 0
   try {
-    const r = await refreshDashboard()
-    if (!r.ok) {
-      error.value = r.message
+    const started = await refreshDashboard()
+    if (!started.ok && started.message !== '正在抓取中') {
+      showToast('error', started.message)
+      return
+    }
+    const status = await fetchRefreshStatus()
+    const result = await waitForRefresh({
+      previousUpdatedAt: data.value?.updatedAt,
+      maxWaitMs: MAX_WAIT_MS,
+      referenceMs: status?.referenceDurationMs ?? DEFAULT_REFERENCE_DURATION_MS,
+      loadDashboard,
+      fetchStatus: fetchRefreshStatus,
+      onTick(elapsed, nextProgress) {
+        elapsedSec.value = Math.floor(elapsed / 1000)
+        progress.value = nextProgress
+      },
+    })
+    if (result.kind === 'updated') {
+      applyDashboard(result.dashboard)
+      showToast('ok', `已更新至 ${formatDateTime(result.dashboard.updatedAt)}`)
+    } else if (result.kind === 'timeout') {
+      showToast('error', '后台抓取超时，数据可能仍在生成，可稍后点击“重新加载”')
     } else {
-      for (let i = 0; i < 60; i++) {
-        await new Promise((r) => setTimeout(r, 2000))
-        try {
-          const d = await loadDashboard()
-          if (d.updatedAt && d.updatedAt !== data.value?.updatedAt) {
-            data.value = d
-            break
-          }
-        } catch {
-          /* keep waiting */
-        }
-      }
-      await reload()
+      showToast('error', '抓取可能失败，详见服务器日志')
     }
   } catch (e) {
-    error.value = e instanceof Error ? e.message : String(e)
+    showToast('error', e instanceof Error ? e.message : String(e))
   } finally {
     refreshing.value = false
+    progress.value = 0
   }
 }
 
@@ -182,6 +134,9 @@ function onSelect(code: string) {
 }
 
 onMounted(reload)
+onBeforeUnmount(() => {
+  if (toastTimer) clearTimeout(toastTimer)
+})
 </script>
 
 <template>
@@ -201,23 +156,42 @@ onMounted(reload)
         <span v-if="data?.updatedAt" class="pill">
           数据更新 {{ formatDateTime(data.updatedAt) }}
         </span>
-        <button class="btn ghost" :disabled="loading" @click="reload">
+        <button class="btn ghost" :disabled="loading || refreshing" @click="reload">
           重新加载
         </button>
         <button
-          v-if="supportsServerRefresh"
-          class="btn primary"
-          :disabled="refreshing"
-          @click="onRefresh"
-        >
-          {{ refreshing ? '抓取中…' : '刷新公开数据' }}
+                v-if="supportsServerRefresh"
+                class="btn primary"
+                :disabled="refreshing"
+                @click="onRefresh">
+          <span v-if="refreshing" class="spinner" aria-hidden="true" />
+          {{ refreshing ? `抓取中 · 已用时 ${elapsedSec} 秒` : '刷新公开数据' }}
         </button>
       </div>
     </header>
 
+    <div
+         v-if="showProgress"
+         class="refresh-progress"
+         :class="{ indeterminate: !refreshing }"
+         role="status"
+         aria-live="polite">
+      <div class="refresh-progress-track">
+        <div
+             class="refresh-progress-bar"
+             :style="{ width: `${Math.max(progress, 0.04) * 100}%` }" />
+      </div>
+      <p v-if="refreshing" class="muted refresh-progress-note">
+        正在后台拉取公开数据，完成后自动刷新
+      </p>
+    </div>
+
     <main class="main">
-      <div v-if="loading" class="state">正在加载看板数据…</div>
-      <div v-else-if="error" class="state error">
+      <div v-if="!data && loading" class="state">
+        <span class="spinner" aria-hidden="true" />
+        正在加载看板数据…
+      </div>
+      <div v-else-if="!data && error" class="state error">
         <p>{{ error }}</p>
         <p class="muted">
           请在项目根目录执行
@@ -226,13 +200,12 @@ onMounted(reload)
       </div>
       <template v-else>
         <SummaryCards
-          :etfs="etfs"
-          :total-mv="data?.summary.totalHuijinMarketValue ?? null"
-          :active-cap-yi="data?.summary.latestActiveCapYi ?? null"
-          :active-cap-date="data?.summary.latestActiveCapDate ?? null"
-          :latest-report="data?.summary.latestReportDate ?? null"
-          :updated-at="data?.updatedAt || ''"
-        />
+                      :etfs="etfs"
+                      :total-mv="data?.summary.totalHuijinMarketValue ?? null"
+                      :active-cap-yi="data?.summary.latestActiveCapYi ?? null"
+                      :active-cap-date="data?.summary.latestActiveCapDate ?? null"
+                      :latest-report="data?.summary.latestReportDate ?? null"
+                      :updated-at="data?.updatedAt || ''" />
 
         <DataQualityBar v-if="data" :data="data" />
 
@@ -246,21 +219,18 @@ onMounted(reload)
             </div>
             <div class="seg">
               <button
-                :class="{ on: metric === 'percent' }"
-                @click="metric = 'percent'"
-              >
+                      :class="{ on: metric === 'percent' }"
+                      @click="metric = 'percent'">
                 占比%
               </button>
               <button
-                :class="{ on: metric === 'shares' }"
-                @click="metric = 'shares'"
-              >
+                      :class="{ on: metric === 'shares' }"
+                      @click="metric = 'shares'">
                 份额
               </button>
               <button
-                :class="{ on: metric === 'value' }"
-                @click="metric = 'value'"
-              >
+                      :class="{ on: metric === 'value' }"
+                      @click="metric = 'value'">
                 估值
               </button>
             </div>
@@ -278,13 +248,11 @@ onMounted(reload)
             </div>
           </div>
           <ActiveCapChart
-            :history="data?.marketActiveCapHistory ?? []"
-            :events="marketEvents"
-          />
+                          :history="data?.marketActiveCapHistory ?? []"
+                          :events="marketEvents" />
           <MarketInsightPanel
-            :history="data?.marketActiveCapHistory ?? []"
-            :events="marketEvents"
-          />
+                              :history="data?.marketActiveCapHistory ?? []"
+                              :events="marketEvents" />
         </section>
 
         <section class="card panel">
@@ -297,9 +265,8 @@ onMounted(reload)
             </div>
           </div>
           <MainlinePanel
-            :etfs="data?.etfs ?? []"
-            :sector-trend="data?.sectorTrend ?? null"
-          />
+                         :etfs="data?.etfs ?? []"
+                         :sector-trend="data?.sectorTrend ?? null" />
         </section>
 
         <section class="card panel">
@@ -312,15 +279,13 @@ onMounted(reload)
             </div>
             <div class="seg">
               <button
-                :class="{ on: shareMode === 'all' }"
-                @click="shareMode = 'all'"
-              >
+                      :class="{ on: shareMode === 'all' }"
+                      @click="shareMode = 'all'">
                 全部对比
               </button>
               <button
-                :class="{ on: shareMode === 'single' }"
-                @click="shareMode = 'single'"
-              >
+                      :class="{ on: shareMode === 'single' }"
+                      @click="shareMode = 'single'">
                 当前 ETF
               </button>
             </div>
@@ -335,19 +300,24 @@ onMounted(reload)
               <p class="muted">点击行查看十大持有人明细；金色高亮为汇金系主体</p>
             </div>
             <div class="panel-actions">
-              <button class="btn ghost" type="button" @click="downloadEtfCsv">
+              <button
+                      class="btn ghost"
+                      type="button"
+                      @click="downloadEtfCsv(etfs, data?.updatedAt)">
                 导出 ETF CSV
               </button>
-              <button class="btn ghost" type="button" @click="downloadMarketCsv">
+              <button
+                      class="btn ghost"
+                      type="button"
+                      @click="downloadMarketCsv(data)">
                 导出 0AMV CSV
               </button>
             </div>
           </div>
           <EtfTable
-            :etfs="etfs"
-            :selected-code="selectedCode"
-            @select="onSelect"
-          />
+                    :etfs="etfs"
+                    :selected-code="selectedCode"
+                    @select="onSelect" />
         </section>
 
         <section class="card panel">
@@ -357,9 +327,14 @@ onMounted(reload)
         <footer class="foot muted">
           <p>
             数据来源：上交所/深交所 ETF 每日总份额、新浪财经十大持有人、天天基金定期规模、东方财富
-            ETF 行情/净值及中证全指日线。0AMV 按公开近似公式计算，定义参见
-            <a href="https://www.compass.cn/shownews.php?nid=33751625" target="_blank" rel="noopener noreferrer">指南针说明</a>；
-            汇金持仓通常于年报/半年报披露，非实时；最近披露期之后按占比区间口径估算（下界假设份额变动全归因汇金，上界假设汇金占比不变，展示值取区间加权），估算不代表实际持仓。
+
+          <div v-if="toast.show" class="toast" :data-tone="toast.tone" role="status">
+            {{ toast.text }}
+          </div>
+          ETF 行情/净值及中证全指日线。0AMV 按公开近似公式计算，定义参见
+          <a href="https://www.compass.cn/shownews.php?nid=33751625" target="_blank"
+             rel="noopener noreferrer">指南针说明</a>；
+          汇金持仓通常于年报/半年报披露，非实时；最近披露期之后按占比区间口径估算（下界假设份额变动全归因汇金，上界假设汇金占比不变，展示值取区间加权），估算不代表实际持仓。
           </p>
           <p>仅供研究展示，不构成投资建议。请以交易所与基金正式公告为准。</p>
         </footer>

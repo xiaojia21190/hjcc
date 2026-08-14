@@ -2,9 +2,10 @@
 import { computed } from 'vue'
 import type { MarketActiveCapPoint, MarketReportEvent } from '../../shared/types'
 import BaseChart from './BaseChart.vue'
-import type { EChartsCoreOption } from 'echarts/core'
 import { changeClass, formatPct, formatYi } from '../utils/format'
 import { computeMacd } from '../utils/macd'
+import { computeKdj, kdjSignal } from '../utils/kdj'
+import { buildActiveCapChartOption } from '../utils/activeCapChartOption'
 
 const props = withDefaults(
   defineProps<{
@@ -14,20 +15,28 @@ const props = withDefaults(
   { history: () => [], events: () => [] },
 )
 
-const axisStyle = {
-  axisLine: { lineStyle: { color: 'rgba(148,163,184,0.25)' } },
-  axisLabel: { color: '#93a4b8', fontSize: 11 },
-  splitLine: { lineStyle: { color: 'rgba(148,163,184,0.08)' } },
-}
-
 function changePct(current: number, previous?: number): number | null {
   if (previous == null || previous === 0) return null
   return ((current / previous) - 1) * 100
 }
 
-const macd = computed(() =>
-  computeMacd(props.history.map((point) => point.activeCapYi)),
-)
+function macdSignal(
+  current?: { dif: number; dea: number },
+  previous?: { dif: number; dea: number },
+): string {
+  if (current == null) return '数据不足'
+  if (previous != null && previous.dif < previous.dea && current.dif >= current.dea) {
+    return '金叉'
+  }
+  if (previous != null && previous.dif >= previous.dea && current.dif < current.dea) {
+    return '死叉'
+  }
+  return current.dif >= current.dea ? '多头' : '空头'
+}
+
+const values = computed(() => props.history.map((point) => point.activeCapYi))
+const macd = computed(() => computeMacd(values.value))
+const kdj = computed(() => computeKdj(values.value))
 
 const marketStats = computed(() => {
   const latest = props.history.at(-1)
@@ -35,26 +44,10 @@ const marketStats = computed(() => {
   const previous = props.history.at(-2)
   const twentyDaysAgo = props.history.at(-21)
   const dayChange = changePct(latest.activeCapYi, previous?.activeCapYi)
-  const twentyDayChange = changePct(
-    latest.activeCapYi,
-    twentyDaysAgo?.activeCapYi,
-  )
-  const referenceGap = changePct(
-    latest.activeCapYi,
-    latest.referenceMaYi ?? undefined,
-  )
+  const twentyDayChange = changePct(latest.activeCapYi, twentyDaysAgo?.activeCapYi)
+  const referenceGap = changePct(latest.activeCapYi, latest.referenceMaYi ?? undefined)
   const macdLatest = macd.value.at(-1)
-  const macdPrevious = macd.value.at(-2)
-  const macdSub =
-    macdLatest == null
-      ? '数据不足'
-      : macdLatest.dif >= macdLatest.dea
-        ? macdPrevious != null && macdPrevious.dif < macdPrevious.dea
-          ? '金叉'
-          : '多头'
-        : macdPrevious != null && macdPrevious.dif >= macdPrevious.dea
-          ? '死叉'
-          : '空头'
+  const kdjLatest = kdj.value.at(-1)
 
   return [
     {
@@ -87,198 +80,25 @@ const marketStats = computed(() => {
     {
       label: 'MACD(12,26,9)',
       value: macdLatest == null ? '—' : macdLatest.macd.toFixed(2),
-      sub: macdSub,
+      sub: macdSignal(macdLatest, macd.value.at(-2)),
       tone: macdLatest == null ? '' : changeClass(macdLatest.macd),
     },
     {
-      label: '沪深两市成交额',
-      value: formatYi(latest.marketAmountYi),
-      sub: '上证综指 + 深证成指',
-      tone: '',
+      label: 'KDJ(9,3,3)',
+      value:
+        kdjLatest == null ? '—' : `${kdjLatest.k.toFixed(1)} / ${kdjLatest.d.toFixed(1)}`,
+      sub:
+        kdjLatest == null
+          ? '数据不足'
+          : `J ${kdjLatest.j.toFixed(1)} · ${kdjSignal(kdjLatest, kdj.value.at(-2))}`,
+      tone: kdjLatest == null ? '' : changeClass(kdjLatest.k - kdjLatest.d),
     },
   ]
 })
 
-const option = computed<EChartsCoreOption>(() => {
-  const history = props.history
-  const dates = history.map((point) => point.date)
-  const visibleStart = Math.max(0, dates.length - 250)
-  const historyDates = new Set(dates)
-  const events = props.events.filter((event) => historyDates.has(event.date))
-  const macdPoints = macd.value
-
-  return {
-    backgroundColor: 'transparent',
-    color: ['#3d9cf0', '#f0b429', '#5eead4'],
-    tooltip: {
-      trigger: 'axis',
-      backgroundColor: 'rgba(18,24,32,0.96)',
-      borderColor: 'rgba(148,163,184,0.2)',
-      textStyle: { color: '#e8eef7', fontSize: 12 },
-    },
-    axisPointer: { link: [{ xAxisIndex: 'all' }] },
-    legend: {
-      top: 0,
-      textStyle: { color: '#93a4b8', fontSize: 12 },
-    },
-    grid: [
-      { left: 72, right: 72, top: 44, height: '48%' },
-      { left: 72, right: 72, top: '70%', height: '16%' },
-    ],
-    dataZoom: [
-      {
-        type: 'inside',
-        xAxisIndex: [0, 1],
-        startValue: visibleStart,
-        endValue: Math.max(visibleStart, dates.length - 1),
-      },
-      {
-        type: 'slider',
-        xAxisIndex: [0, 1],
-        height: 20,
-        bottom: 16,
-        startValue: visibleStart,
-        endValue: Math.max(visibleStart, dates.length - 1),
-        borderColor: 'rgba(148,163,184,0.15)',
-        backgroundColor: 'rgba(15,23,42,0.35)',
-        fillerColor: 'rgba(61,156,240,0.18)',
-        textStyle: { color: '#6b7c90' },
-      },
-    ],
-    xAxis: [
-      {
-        type: 'category',
-        data: dates,
-        boundaryGap: true,
-        ...axisStyle,
-        axisLabel: { ...axisStyle.axisLabel, formatter: (value: string) => value.slice(0, 7) },
-      },
-      {
-        type: 'category',
-        gridIndex: 1,
-        data: dates,
-        boundaryGap: true,
-        ...axisStyle,
-        axisLabel: { show: false },
-        axisTick: { show: false },
-      },
-    ],
-    yAxis: [
-      {
-        type: 'value',
-        name: '0AMV 估算（亿元）',
-        nameTextStyle: { color: '#6b7c90', fontSize: 11 },
-        scale: true,
-        ...axisStyle,
-      },
-      {
-        type: 'value',
-        name: '成交额（亿元）',
-        nameTextStyle: { color: '#6b7c90', fontSize: 11 },
-        splitLine: { show: false },
-        axisLine: axisStyle.axisLine,
-        axisLabel: axisStyle.axisLabel,
-      },
-      {
-        type: 'value',
-        gridIndex: 1,
-        name: 'MACD',
-        nameTextStyle: { color: '#6b7c90', fontSize: 11 },
-        scale: true,
-        splitNumber: 2,
-        splitLine: { show: false },
-        axisLine: axisStyle.axisLine,
-        axisLabel: axisStyle.axisLabel,
-      },
-    ],
-    series: [
-      {
-        name: '0AMV 活筹估算',
-        type: 'line',
-        smooth: true,
-        showSymbol: false,
-        data: history.map((point) => point.activeCapYi),
-        itemStyle: { color: '#3d9cf0' },
-        lineStyle: { width: 2.4 },
-        areaStyle: { color: 'rgba(61,156,240,0.10)' },
-        markLine: events.length
-          ? {
-              symbol: ['none', 'none'],
-              silent: false,
-              lineStyle: { color: 'rgba(240,180,41,0.65)', type: 'dashed', width: 1 },
-              label: {
-                show: true,
-                color: '#f0b429',
-                fontSize: 10,
-                formatter: '{b}',
-                position: 'insideEndTop',
-              },
-              data: events.map((event) => ({
-                name: event.label,
-                xAxis: event.date,
-              })),
-            }
-          : undefined,
-        z: 3,
-      },
-      {
-        name: '5 日参考线',
-        type: 'line',
-        smooth: true,
-        showSymbol: false,
-        data: history.map((point) => point.referenceMaYi),
-        itemStyle: { color: '#f0b429' },
-        lineStyle: { width: 1.6 },
-        z: 4,
-      },
-      {
-        name: '沪深两市成交额',
-        type: 'bar',
-        yAxisIndex: 1,
-        data: history.map((point) => point.marketAmountYi),
-        barMaxWidth: 8,
-        itemStyle: { color: 'rgba(94,234,212,0.18)' },
-        z: 1,
-      },
-      {
-        name: 'DIF',
-        type: 'line',
-        xAxisIndex: 1,
-        yAxisIndex: 2,
-        showSymbol: false,
-        data: macdPoints.map((point) => point.dif),
-        itemStyle: { color: '#e8eef7' },
-        lineStyle: { width: 1.4 },
-        z: 2,
-      },
-      {
-        name: 'DEA',
-        type: 'line',
-        xAxisIndex: 1,
-        yAxisIndex: 2,
-        showSymbol: false,
-        data: macdPoints.map((point) => point.dea),
-        itemStyle: { color: '#f0b429' },
-        lineStyle: { width: 1.4, type: 'dashed' },
-        z: 2,
-      },
-      {
-        name: 'MACD 柱',
-        type: 'bar',
-        xAxisIndex: 1,
-        yAxisIndex: 2,
-        data: macdPoints.map((point) => ({
-          value: point.macd,
-          itemStyle: {
-            color: point.macd >= 0 ? 'rgba(248,113,113,0.75)' : 'rgba(74,222,128,0.75)',
-          },
-        })),
-        barMaxWidth: 6,
-        z: 1,
-      },
-    ],
-  }
-})
+const option = computed(() =>
+  buildActiveCapChartOption(props.history, props.events, macd.value, kdj.value),
+)
 </script>
 
 <template>
@@ -294,6 +114,9 @@ const option = computed<EChartsCoreOption>(() => {
     <p v-if="events.length" class="chart-note">
       金色虚线仅标记汇金持有人报告期；报告期不等同于公告发布日期。
     </p>
-    <BaseChart :option="option" height="420px" />
+    <p class="chart-note muted">
+      KDJ 用 0AMV 自身滚动高低点近似 RSV，不是个股 OHLC 口径；虚线为 20 / 50 / 80。
+    </p>
+    <BaseChart :option="option" height="520px" />
   </template>
 </template>

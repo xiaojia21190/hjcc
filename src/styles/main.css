@@ -185,6 +185,92 @@ tr:focus-visible {
   color: var(--up);
 }
 
+.spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(148, 163, 184, 0.25);
+  border-top-color: var(--accent-2);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  vertical-align: -2px;
+}
+
+.btn .spinner {
+  margin-right: 6px;
+}
+
+.state .spinner {
+  margin-right: 8px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.refresh-progress {
+  margin: -6px 0 16px;
+}
+
+.refresh-progress-track {
+  height: 3px;
+  overflow: hidden;
+  border-radius: 99px;
+  background: rgba(148, 163, 184, 0.12);
+}
+
+.refresh-progress-bar {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #3d9cf0, #5eead4);
+  transition: width 0.8s ease-out;
+}
+
+.refresh-progress.indeterminate .refresh-progress-bar {
+  width: 36% !important;
+  animation: progress-slide 1.2s ease-in-out infinite;
+}
+
+@keyframes progress-slide {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(320%);
+  }
+}
+
+.refresh-progress-note {
+  margin: 6px 0 0;
+  font-size: 12px;
+}
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 20px;
+  z-index: 20;
+  max-width: min(560px, calc(100vw - 24px));
+  padding: 10px 14px;
+  transform: translateX(-50%);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(17, 27, 43, 0.96);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
+  font-size: 13px;
+}
+
+.toast[data-tone='ok'] {
+  border-color: rgba(94, 234, 212, 0.35);
+}
+
+.toast[data-tone='error'] {
+  border-color: rgba(240, 113, 120, 0.4);
+  color: #f07178;
+}
+
 .summary {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -693,6 +779,10 @@ tr:focus-visible {
   font-size: 12px;
 }
 
+.chart-note.muted {
+  color: var(--text-dim);
+}
+
 .market-insight {
   margin-top: 12px;
   padding-top: 12px;
@@ -903,6 +993,10 @@ tr:focus-visible {
   .summary {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+  .market-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    row-gap: 12px;
+  }
   .detail-grid {
     grid-template-columns: 1fr;
   }
@@ -1074,5 +1168,9 @@ tr:focus-visible {
     scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;
+  }
+  .spinner,
+  .refresh-progress-bar {
+    animation: none;
   }
 }

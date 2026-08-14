@@ -4,6 +4,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
+    "test": "bun test",
     "audit": "bun run scripts/data-audit.ts",
     "calibrate": "bun run scripts/calibrate-mainline.ts",
     "build": "vue-tsc -b && vite build",

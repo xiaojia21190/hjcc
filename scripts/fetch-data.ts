@@ -25,6 +25,11 @@ import {
 } from './lib/merge'
 import { formatCompletenessReport } from './lib/report'
 import {
+  NAV_FETCH_PAGES,
+  serializeDashboard,
+  slimEtfSnapshot,
+} from './lib/payload'
+import {
   fetchEtfUniverse,
   buildMarketActiveCapHistory,
   fetchMarketActiveCapHistory,
@@ -215,7 +220,7 @@ async function buildEtfSnapshot(
     await Promise.all([
       fetchAllHolderReports(code, 12),
       fetchScaleHistory(code),
-      fetchNavHistory(code, 80),
+      fetchNavHistory(code, NAV_FETCH_PAGES),
     ])
 
   const holdersFromCache =
@@ -231,8 +236,8 @@ async function buildEtfSnapshot(
     scaleHistoryFetched.length > 0
       ? scaleHistoryFetched
       : (previous?.scaleHistory ?? []).filter(
-          (point) => point.frequency !== 'daily',
-        )
+        (point) => point.frequency !== 'daily',
+      )
   const navHistory =
     navHistoryFetched.length > 0
       ? navHistoryFetched
@@ -259,7 +264,7 @@ async function buildEtfSnapshot(
       ? disclosedHuijinHistory[disclosedHuijinHistory.length - 1]
       : null
 
-  return {
+  return slimEtfSnapshot({
     category: category.id,
     categoryName: category.name,
     code,
@@ -291,7 +296,7 @@ async function buildEtfSnapshot(
         : undefined,
       fetchedAt: new Date().toISOString(),
     },
-  }
+  })
 }
 
 interface MarketActiveCapResolution {
@@ -475,15 +480,11 @@ async function main() {
     },
   }
 
+  const payload = serializeDashboard(dashboard)
   await mkdir(DATA_DIR, { recursive: true })
-  await writeFile(OUT_FILE, JSON.stringify(dashboard, null, 2), 'utf-8')
-  // 同时写一份给前端 public
+  await writeFile(OUT_FILE, payload, 'utf-8')
   await mkdir(join(ROOT, 'public'), { recursive: true })
-  await writeFile(
-    join(ROOT, 'public', 'dashboard.json'),
-    JSON.stringify(dashboard, null, 2),
-    'utf-8',
-  )
+  await writeFile(join(ROOT, 'public', 'dashboard.json'), payload, 'utf-8')
   console.log(`\n✓ 已写入 ${OUT_FILE}`)
   console.log(
     `  最近披露汇金合计估值: ${totalMv != null ? (totalMv / 1e8).toFixed(2) + ' 亿元' : 'N/A'}`,

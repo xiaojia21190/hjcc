@@ -10,8 +10,36 @@ const ROOT = join(import.meta.dir, '..')
 const DATA_FILE = join(ROOT, 'data', 'dashboard.json')
 const PUBLIC_FILE = join(ROOT, 'public', 'dashboard.json')
 const PORT = Number(process.env.PORT || 8787)
+const REFERENCE_DURATION_MS = 90_000
 
-let fetching = false
+type FetchStatus = {
+  state: 'fetching' | 'idle'
+  startedAt: string | null
+  updatedAt: string | null
+}
+
+let fetchStatus: FetchStatus = {
+  state: 'idle',
+  startedAt: null,
+  updatedAt: null,
+}
+
+function isFetching() {
+  return fetchStatus.state === 'fetching'
+}
+
+function markFetching() {
+  const now = new Date().toISOString()
+  fetchStatus = { state: 'fetching', startedAt: now, updatedAt: now }
+}
+
+function markIdle() {
+  fetchStatus = {
+    state: 'idle',
+    startedAt: null,
+    updatedAt: new Date().toISOString(),
+  }
+}
 
 async function loadDashboard(): Promise<unknown> {
   const path = existsSync(DATA_FILE)
@@ -69,7 +97,14 @@ Bun.serve({
 
     if (url.pathname === '/api/health') {
       return Response.json(
-        { ok: true, fetching, hasData: existsSync(DATA_FILE) },
+        { ok: true, fetching: isFetching(), hasData: existsSync(DATA_FILE) },
+        { headers: cors },
+      )
+    }
+
+    if (url.pathname === '/api/refresh/status' && req.method === 'GET') {
+      return Response.json(
+        { ...fetchStatus, referenceDurationMs: REFERENCE_DURATION_MS },
         { headers: cors },
       )
     }
@@ -85,17 +120,17 @@ Bun.serve({
     }
 
     if (url.pathname === '/api/refresh' && req.method === 'POST') {
-      if (fetching) {
+      if (isFetching()) {
         return Response.json(
           { ok: false, message: '正在抓取中' },
           { status: 409, headers: cors },
         )
       }
-      fetching = true
+      markFetching()
       // 异步抓取
       runFetch()
         .then(async (code) => {
-          fetching = false
+          markIdle()
           if (code === 0) {
             // 同步到 public
             try {
@@ -109,7 +144,7 @@ Bun.serve({
           console.log('refresh finished', code)
         })
         .catch((e) => {
-          fetching = false
+          markIdle()
           console.error(e)
         })
       return Response.json(

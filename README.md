@@ -48,7 +48,7 @@ Tushare `index_daily` 需要分别请求三只指数，且免费额度可能限�
 # 安装依赖
 bun install
 
-# 抓取并缓存公开数据 → data/dashboard.json & public/dashboard.json
+# 抓取并缓存公开数据 → data/dashboard.json & public/dashboard.json（紧凑 JSON）
 bun run fetch
 
 # 启动 API（可选，支持 /api/dashboard 与后台刷新）

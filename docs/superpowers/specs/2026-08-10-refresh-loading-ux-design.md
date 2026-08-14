@@ -1,7 +1,7 @@
 ---
 date: 2026-08-10
 topic: refresh-loading-ux
-status: ready-for-plan
+status: implemented
 ---
 
 # 在线刷新 loading 体验打磨 设计

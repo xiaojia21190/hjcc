@@ -8,6 +8,7 @@ import {
   LegendComponent,
   DataZoomComponent,
   TitleComponent,
+  MarkLineComponent,
 } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 import type { EChartsCoreOption } from 'echarts/core'
@@ -22,6 +23,7 @@ echarts.use([
   LegendComponent,
   DataZoomComponent,
   TitleComponent,
+  MarkLineComponent,
   CanvasRenderer,
 ])
 
