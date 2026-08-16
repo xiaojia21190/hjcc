@@ -4,18 +4,14 @@ import type { BriefingEtfInput } from './forceBriefing'
 import { collectForceInputs } from './forceVerdictCollect'
 import type { ForceMarketInput } from './forceVerdict'
 
+/**
+ * 份额窗口与 shareChangePct5d 同口径：都在日频子序列
+ * （即带 shareTrend 的点）上取第 i 期与第 i-5 期，见 shared/estimate-signals.ts。
+ */
 function shareWindow(etf: EtfSnapshot): Pick<BriefingEtfInput, 'lastSharesYi' | 'sharesYi5dAgo'> {
-  const history = etf.huijinEstimateHistory
-  let lastIdx = -1
-  for (let index = history.length - 1; index >= 0; index -= 1) {
-    if (history[index]?.shareTrend != null) {
-      lastIdx = index
-      break
-    }
-  }
-  if (lastIdx < 0) return { lastSharesYi: null, sharesYi5dAgo: null }
-  const last = history[lastIdx]
-  const ago = history[lastIdx - 5]
+  const daily = etf.huijinEstimateHistory.filter((point) => point.shareTrend != null)
+  const last = daily.at(-1)
+  const ago = daily.at(-6)
   return {
     lastSharesYi: last?.totalSharesYi ?? null,
     sharesYi5dAgo: ago?.totalSharesYi ?? null,

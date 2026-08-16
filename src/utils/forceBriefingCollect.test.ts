@@ -95,4 +95,27 @@ describe('collectBriefingInputs', () => {
     })
     expect(collected.market).toEqual({ activeCapYi: 1, referenceMaYi: 2 })
   })
+
+  test('share window skips non-daily points, matching shareChangePct5d basis', () => {
+    const history = [
+      // 日频点：份额 14 → 20，5 日变化 ≈ +42.86%
+      point({ date: '2026-08-01', totalSharesYi: 14, shareTrend: 'inflow', consecutiveDays: 1, shareChangePct5d: null }),
+      point({ date: '2026-08-11', totalSharesYi: 15, shareTrend: 'inflow', consecutiveDays: 2, shareChangePct5d: null }),
+      point({ date: '2026-08-12', totalSharesYi: 16, shareTrend: 'inflow', consecutiveDays: 3, shareChangePct5d: null }),
+      point({ date: '2026-08-13', totalSharesYi: 17, shareTrend: 'inflow', consecutiveDays: 4, shareChangePct5d: null }),
+      point({ date: '2026-08-14', totalSharesYi: 18, shareTrend: 'inflow', consecutiveDays: 5, shareChangePct5d: null }),
+      // 夹在中间的非日频点（无 shareTrend）：份额 99，不应成为基点
+      point({ date: '2026-08-15', totalSharesYi: 99, estimateMethod: 'unavailable' }),
+      point({ date: '2026-08-16', totalSharesYi: 20, shareTrend: 'outflow', consecutiveDays: 1, shareChangePct5d: 42.86 }),
+    ]
+    const collected = collectBriefingInputs(
+      [snapshot({ categoryName: '沪深300', huijinEstimateHistory: history })],
+      [],
+    )
+    expect(collected.etfs[0]).toMatchObject({
+      lastSharesYi: 20,
+      // 日频子序列第 -6 个是 14，而非全量数组的 15
+      sharesYi5dAgo: 14,
+    })
+  })
 })

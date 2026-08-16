@@ -55,6 +55,8 @@
 
 连续天数门槛 `3` 是描述性取值，不是回测标定。
 
+**单腿澄清**：弱支持第三条的「只有一侧在动且连续 ≥ 3 日」指**无多数时**的单侧持续（有动腿但构不成多数）；若多数已在位（如 4 流入 + 1 平），多数判定优先，走强/弱主路径而非单腿。实现见 `singleLegStructure`：仅在无多数时调用，且由 `strongInflow` 测试钉死。
+
 ### 闸门 3 替代解释
 
 只在结构未过（混合流向）时才可能判「其他资金」：
@@ -100,6 +102,18 @@
 
 文字必须自解释，颜色不是唯一编码。
 
+## 第 4.5 节：主力简报（forceBriefing，后补）
+
+判决条定档，简报把同一结论展开成可扫读短评。两者同屏时必须口径一致，因此 `composeForceBriefing` 内部直接调用 `judgeHuijinForce`，不复制判决逻辑；`meanPricePct` / `countTrends` 等共享口径从 `forceVerdict.ts` 导出复用。
+
+**首屏摆放**：`ForceBriefingPanel` 位于 `SummaryCards` 之上（`src/App.vue`），理由是简报一句话即可回答「今天篮子整体在干什么」，先给结论再给摘要卡数字。这与「signal-first 叙事」方向一致；若首屏拥挤可下移至判决条之后，不改变数据口径。
+
+**安静阈值**：`QUIET_ABS_PCT_5D = 3`、`QUIET_CONSECUTIVE_DAYS = 3`——5 日份额变化绝对值 < 3% 且连续 < 3 日视为「几乎没动」，只进 `XX、YY 几乎没动` 一句，不展开。与闸门的 `MIN_*` 常量同为描述性取值，非回测标定。
+
+**金额换算**：`capitalYi = (lastSharesYi - sharesYi5dAgo) × quotePrice`，无行情价或份额缺口时回退用 5 日变化率排序，不编造金额。
+
+**文案约束**：继承判决条全部禁令（禁止「汇金买入/卖出」），并由 `forceBriefing.test.ts` 的 `not.toMatch` 断言钉死。
+
 ## 第 5 节：测试与验证
 
 - `forceVerdict.test.ts`：空输入、无披露、多数连续、单腿、方向冲突、对倒 5 日、两侧持续、对象失败优先于其他资金、意图对照表
@@ -109,6 +123,7 @@
 ## 影响文件
 
 - `src/utils/forceVerdict.ts`、`src/utils/forceVerdictCollect.ts` 及测试
-- `src/components/ForceVerdictPanel.vue`
+- `src/utils/forceBriefing.ts`、`src/utils/forceBriefingCollect.ts` 及测试（见第 4.5 节）
+- `src/components/ForceVerdictPanel.vue`、`src/components/ForceBriefingPanel.vue`
 - `src/App.vue`、`src/styles/main.css`
 - `README.md` 口径说明

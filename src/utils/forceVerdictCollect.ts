@@ -9,7 +9,7 @@ export function navChangePct5d(navs: readonly NavPoint[]): number | null {
   const base = navs[navs.length - 6]!
   const lastNav = last.accNav > 0 ? last.accNav : last.nav
   const baseNav = base.accNav > 0 ? base.accNav : base.nav
-  if (!(baseNav > 0)) return null
+  if (!(lastNav > 0) || !(baseNav > 0)) return null
   return Number((((lastNav / baseNav) - 1) * 100).toFixed(2))
 }
 

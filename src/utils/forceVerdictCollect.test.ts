@@ -69,6 +69,16 @@ describe('navChangePct5d', () => {
     }))
     expect(navChangePct5d(navs)).toBe(5)
   })
+
+  test('returns null when the latest nav is non-positive', () => {
+    const navs = [1, 1, 1, 1, 1, 0].map((nav, index) => ({
+      date: `d${index}`,
+      nav,
+      accNav: 0,
+      changePct: 0,
+    }))
+    expect(navChangePct5d(navs)).toBeNull()
+  })
 })
 
 describe('collectForceInputs', () => {

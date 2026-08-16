@@ -3,8 +3,10 @@
  * 不调用模型，不识别持有人，禁止「汇金买入/卖出」。
  */
 import {
+  countTrends,
   DISCLAIMER,
   judgeHuijinForce,
+  meanPricePct,
   type FlowTone,
   type ForceEtfInput,
   type ForceMarketInput,
@@ -38,34 +40,14 @@ function signedPct(value: number): string {
   return value > 0 ? `+${text}` : text
 }
 
-function meanPricePct(etfs: BriefingEtfInput[]): number | null {
-  const values = etfs
-    .map((row) => row.priceChangePct5d)
-    .filter((value): value is number => value != null)
-  if (values.length === 0) return null
-  return values.reduce((sum, value) => sum + value, 0) / values.length
-}
-
 function capitalYi(row: BriefingEtfInput): number | null {
   if (row.lastSharesYi == null || row.sharesYi5dAgo == null) return null
   if (row.quotePrice == null || !(row.quotePrice > 0)) return null
   return (row.lastSharesYi - row.sharesYi5dAgo) * row.quotePrice
 }
 
-function countFlow(etfs: BriefingEtfInput[]) {
-  let inflow = 0
-  let outflow = 0
-  let flat = 0
-  for (const row of etfs) {
-    if (row.shareTrend === 'inflow') inflow += 1
-    else if (row.shareTrend === 'outflow') outflow += 1
-    else if (row.shareTrend === 'flat') flat += 1
-  }
-  return { inflow, outflow, flat, known: inflow + outflow + flat }
-}
-
 function countLine(etfs: BriefingEtfInput[], tone: FlowTone): string {
-  const counts = countFlow(etfs)
+  const counts = countTrends(etfs)
   if (counts.known === 0) return '无有效流向'
   if (tone === 'inflow') return `${counts.inflow}/${counts.known} 只净流入`
   if (tone === 'outflow') return `${counts.outflow}/${counts.known} 只净流出`
@@ -150,7 +132,12 @@ function composeBullets(
     const dir =
       row.shareTrend === 'inflow' ? '流入' : row.shareTrend === 'outflow' ? '流出' : '平坦'
     const pct = row.shareChangePct5d == null ? '—' : signedPct(row.shareChangePct5d)
-    return `${row.categoryName}：${dir}，连续${row.consecutiveDays}日，5日 ${pct}`
+    // 平坦无连续语义（computeTrendSignals 对 flat 不累计），不输出连续天数
+    const streak =
+      row.shareTrend === 'flat' || row.consecutiveDays <= 0
+        ? ''
+        : `，连续${row.consecutiveDays}日`
+    return `${row.categoryName}：${dir}${streak}，5日 ${pct}`
   })
   if (market.activeCapYi != null && market.referenceMaYi != null) {
     const vs = market.activeCapYi >= market.referenceMaYi ? '高于' : '低于'

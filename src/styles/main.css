@@ -13,6 +13,7 @@
   --accent: #3d9cf0;
   --accent-2: #5eead4;
   --huijin: #f0b429;
+  --tier-other: #c084fc;
   --up: #f07178;
   --down: #61d6aa;
 }
@@ -298,7 +299,7 @@ tr:focus-visible {
   background: var(--accent-2);
 }
 .summary-card[data-accent='purple']::before {
-  background: #c084fc;
+  background: var(--tier-other);
 }
 .summary-card[data-accent='orange']::before {
   background: #fb923c;
@@ -489,6 +490,25 @@ tr:focus-visible {
   border-right: 0;
 }
 
+/* 闸格状态辅助色，与综合档配色同源；文字自解释，颜色非唯一编码 */
+.force-verdict-gate[data-status='pass'] .insight-value,
+.force-verdict-gate[data-status='strong'] .insight-value {
+  color: var(--accent-2);
+}
+
+.force-verdict-gate[data-status='weak'] .insight-value {
+  color: var(--huijin);
+}
+
+.force-verdict-gate[data-status='fail'] .insight-value,
+.force-verdict-gate[data-status='unresolved'] .insight-value {
+  color: var(--text-dim);
+}
+
+.force-verdict-gate[data-status='other'] .insight-value {
+  color: var(--tier-other);
+}
+
 .force-verdict-primary[data-tier='credible'][data-tone='inflow'] .insight-value {
   color: var(--accent-2);
 }
@@ -506,7 +526,7 @@ tr:focus-visible {
 }
 
 .force-verdict-primary[data-tier='other'] .insight-value {
-  color: #c084fc;
+  color: var(--tier-other);
 }
 
 .force-verdict-intent {
@@ -544,7 +564,7 @@ tr:focus-visible {
 }
 
 .force-briefing-hero[data-tier='other'] .insight-value {
-  color: #c084fc;
+  color: var(--tier-other);
 }
 
 .force-briefing-lead,

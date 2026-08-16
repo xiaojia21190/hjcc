@@ -220,6 +220,25 @@ describe('judgeHuijinForce', () => {
     expect(r.intent).toBe('更像撤离')
   })
 
+  test('inflow with rising price but weak 0AMV is add-on with unconfirmed env', () => {
+    const rows = strongInflow.map((row) => ({ ...row, priceChangePct5d: 1.5 }))
+    const r = judgeHuijinForce(rows, { activeCapYi: 80, referenceMaYi: 100 })
+    expect(r.tier).toBe('credible')
+    expect(r.intent).toBe('更像加仓，环境未确认')
+  })
+
+  test('outflow with falling price but unknown 0AMV is reduction with unconfirmed env', () => {
+    const rows = [
+      etf({ categoryName: '沪深300', shareTrend: 'outflow', consecutiveDays: 4, shareChangePct5d: -2.1, priceChangePct5d: -1.4 }),
+      etf({ categoryName: '上证50', shareTrend: 'outflow', consecutiveDays: 3, shareChangePct5d: -1.5, priceChangePct5d: -1.1 }),
+      etf({ categoryName: '中证500', shareTrend: 'outflow', consecutiveDays: 3, shareChangePct5d: -1.2, priceChangePct5d: -0.8 }),
+      etf({ categoryName: '中证1000', shareTrend: 'flat' }),
+    ]
+    const r = judgeHuijinForce(rows)
+    expect(r.tier).toBe('credible')
+    expect(r.intent).toBe('更像减仓，环境未确认')
+  })
+
   test('missing price keeps intent empty', () => {
     const rows = strongInflow.map((row) => ({ ...row, priceChangePct5d: null }))
     const r = judgeHuijinForce(rows, strongMarket)

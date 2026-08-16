@@ -65,9 +65,11 @@ interface StructureResult {
   gate: ForceGate<Gate2Status>
   tone: FlowTone
   detail: string
+  /** 最长连续与多数方向不一致（供 caution 提示，避免文案嗅探） */
+  streakConflict: boolean
 }
 
-function countTrends(etfs: ForceEtfInput[]) {
+export function countTrends(etfs: ForceEtfInput[]) {
   let inflow = 0
   let outflow = 0
   let flat = 0
@@ -127,11 +129,12 @@ function singleLegStructure(etfs: ForceEtfInput[], streak: ReturnType<typeof lon
   const sides = new Set(activeRows(etfs).map((row) => row.shareTrend))
   if (sides.size !== 1 || streak.days < MIN_CONSECUTIVE_STRONG) return null
   const tone = [...sides][0] as FlowSide
-  const name = streak.names[0] ?? activeRows(etfs)[0]!.categoryName
+  const names = streak.names.length > 0 ? streak.names.join('、') : activeRows(etfs)[0]!.categoryName
   return {
-    gate: { status: 'weak', label: '结构弱', reason: `仅${name}连续${streak.days}日` },
+    gate: { status: 'weak', label: '结构弱', reason: `仅${names}连续${streak.days}日` },
     tone,
-    detail: `仅${name}连续${streak.days}日，覆盖面不够，属单腿`,
+    detail: `仅${names}连续${streak.days}日，覆盖面不够，属单腿`,
+    streakConflict: false,
   }
 }
 
@@ -143,13 +146,16 @@ function majorityStructure(etfs: ForceEtfInput[], majority: FlowSide): Structure
       gate: { status: 'weak', label: '结构弱', reason: '最长连续与多数方向不一致' },
       tone: majority,
       detail: '多数同向，但最长连续与多数方向不一致',
+      streakConflict: true,
     }
   }
-  if (fiveDayAgrees(etfs, majority) === false) {
+  const fiveDay = fiveDayAgrees(etfs, majority)
+  if (fiveDay === false) {
     return {
       gate: { status: 'weak', label: '结构弱', reason: '5日幅度与多数方向不一致' },
       tone: majority,
       detail: '多数同向，但持续方向与5日幅度不一致',
+      streakConflict: false,
     }
   }
   if (streak.days < MIN_CONSECUTIVE_STRONG) {
@@ -157,12 +163,14 @@ function majorityStructure(etfs: ForceEtfInput[], majority: FlowSide): Structure
       gate: { status: 'weak', label: '结构弱', reason: `多数同向但连续不足${MIN_CONSECUTIVE_STRONG}日` },
       tone: majority,
       detail: `多数同向但连续不足${MIN_CONSECUTIVE_STRONG}日`,
+      streakConflict: false,
     }
   }
   return {
     gate: { status: 'strong', label: '结构强', reason: `多数同向且连续${streak.days}日` },
     tone: majority,
-    detail: `多数同向且连续${streak.days}日，幅度方向一致`,
+    detail: fiveDay === true ? `多数同向且连续${streak.days}日，幅度方向一致` : `多数同向且连续${streak.days}日`,
+    streakConflict: false,
   }
 }
 
@@ -173,6 +181,7 @@ function judgeStructure(etfs: ForceEtfInput[]): StructureResult {
       gate: { status: 'fail', label: '结构未过', reason: '无日频份额流向' },
       tone: 'none',
       detail: '无日频份额序列',
+      streakConflict: false,
     }
   }
   const majority = majorityOf(counts)
@@ -182,6 +191,7 @@ function judgeStructure(etfs: ForceEtfInput[]): StructureResult {
         gate: { status: 'fail', label: '结构未过', reason: '有进有出，无多数' },
         tone: 'mixed',
         detail: '有进有出，构不成统一篮子',
+        streakConflict: false,
       }
     )
   }
@@ -219,7 +229,7 @@ function combineTier(object: Gate1Status, structure: Gate2Status, alternative: G
   return structure === 'strong' ? 'credible' : 'weak'
 }
 
-function meanPricePct(etfs: ForceEtfInput[]): number | null {
+export function meanPricePct(etfs: ForceEtfInput[]): number | null {
   const values = etfs
     .map((row) => row.priceChangePct5d)
     .filter((value): value is number => value != null)
@@ -253,12 +263,12 @@ function inferIntent(
   return amvWeak ? '更像撤离' : '更像减仓，环境未确认'
 }
 
-function collectCautions(etfs: ForceEtfInput[], structure: ForceGate<Gate2Status>): string[] {
+function collectCautions(etfs: ForceEtfInput[], structure: StructureResult): string[] {
   const lines: string[] = []
   if (etfs.some((row) => row.lowResolution)) lines.push('估算低分辨，水平值不可用')
   const dates = new Set(etfs.map((row) => row.shareDate).filter((date): date is string => !!date))
   if (dates.size > 1) lines.push('份额日期不一致')
-  if (structure.reason.includes('最长连续')) lines.push('最长连续与多数方向不一致')
+  if (structure.streakConflict) lines.push('最长连续与多数方向不一致')
   return lines
 }
 
@@ -282,7 +292,7 @@ export function judgeHuijinForce(
           ? '两侧都有持续流向，更像再平衡'
           : '最大两只5日变化反向，更像再平衡'
         : structure.detail,
-    cautions: collectCautions(etfs, structure.gate),
+    cautions: collectCautions(etfs, structure),
     disclaimer: DISCLAIMER,
   }
 }
