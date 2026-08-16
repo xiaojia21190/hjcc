@@ -18,6 +18,8 @@ import ShareTrendChart from './components/ShareTrendChart.vue'
 import EtfTable from './components/EtfTable.vue'
 import EtfDetail from './components/EtfDetail.vue'
 import DataQualityBar from './components/DataQualityBar.vue'
+import ForceBriefingPanel from './components/ForceBriefingPanel.vue'
+import ForceVerdictPanel from './components/ForceVerdictPanel.vue'
 import { downloadEtfCsv, downloadMarketCsv } from './utils/dashboardExport'
 import { formatDateTime } from './utils/format'
 import { waitForRefresh } from './utils/refreshWait'
@@ -199,6 +201,12 @@ onBeforeUnmount(() => {
         </p>
       </div>
       <template v-else>
+        <ForceBriefingPanel
+          v-if="data"
+          :etfs="etfs"
+          :market-history="data.marketActiveCapHistory ?? []"
+        />
+
         <SummaryCards
                       :etfs="etfs"
                       :total-mv="data?.summary.totalHuijinMarketValue ?? null"
@@ -208,6 +216,12 @@ onBeforeUnmount(() => {
                       :updated-at="data?.updatedAt || ''" />
 
         <DataQualityBar v-if="data" :data="data" />
+
+        <ForceVerdictPanel
+          v-if="data"
+          :etfs="etfs"
+          :market-history="data.marketActiveCapHistory ?? []"
+        />
 
         <section class="card panel">
           <div class="panel-head">
