@@ -224,7 +224,12 @@ onBeforeUnmount(() => {
           :market-history="data.marketActiveCapHistory ?? []"
         />
 
-        <RetailPanel v-if="data" :etfs="etfs" />
+        <RetailPanel
+          v-if="data"
+          :etfs="etfs"
+          :margin-history="data.marginHistory ?? []"
+          :market-history="data.marketActiveCapHistory ?? []"
+        />
 
         <section class="card panel">
           <div class="panel-head">

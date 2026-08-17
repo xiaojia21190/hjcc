@@ -2,7 +2,11 @@
  * 散户情绪反向判定：净申购率 mood + 滚动分位温度 + 汇金方向交叉象限。
  * 纯函数，不识别持有人，反向解读只是假设检验叙事，不构成投资建议。
  */
-import type { EtfSnapshot } from '../../shared/types'
+import type {
+  EtfSnapshot,
+  MarginPoint,
+  MarketActiveCapPoint,
+} from '../../shared/types'
 import { collectForceInputs } from './forceVerdictCollect'
 import { estimateRangeYi } from './estimateDisplay'
 import { percentileRank } from './stats'
@@ -30,6 +34,10 @@ export const TURNOVER_MIN_HISTORY = 30
 export const TURNOVER_HOT = 85
 /** 换手分位 ≤ 此值视为低迷。 */
 export const TURNOVER_COLD = 15
+/** 杠杆分位 ≥ 此值视为过热。 */
+export const MARGIN_HOT = 85
+/** 杠杆分位 ≤ 此值视为降杠杆。 */
+export const MARGIN_COLD = 15
 
 export const DISCLAIMER =
   '不能识别持有人 · 只描述申赎行为 · 反向解读仅是假设 · 不构成投资建议'
@@ -87,6 +95,21 @@ export function turnoverLabel(percentile: number | null): string {
   return '常态'
 }
 
+/** 杠杆温度结果：主标签 + 余额变化供展示。 */
+export interface MarginTemperature {
+  label: string
+}
+
+/** 杠杆温度：融资买入占比分位为主标签。 */
+export function marginTemperature(percentile: number | null): MarginTemperature {
+  if (percentile == null) return { label: '样本不足' }
+  if (percentile >= MARGIN_HOT) return { label: '杠杆过热' }
+  if (percentile >= 65) return { label: '加杠杆' }
+  if (percentile <= MARGIN_COLD) return { label: '降杠杆' }
+  if (percentile <= 35) return { label: '去杠杆' }
+  return { label: '常态' }
+}
+
 export interface RetailEtfRow {
   categoryName: string
   code: string
@@ -117,6 +140,12 @@ export interface RetailVerdict {
   turnoverLabel: string
   /** 换手分位中位数（0-100）。 */
   turnoverPercentile: number | null
+  /** 杠杆温度标签（融资买入占成交额比分位）。 */
+  marginLabel: string
+  /** 融资买入占比 250 日分位。 */
+  marginPercentile: number | null
+  /** 融资余额 5 日变化率（%）。 */
+  marginBalanceChangePct5d: number | null
   quadrant: CrossQuadrant
   quadrantLabel: string
   detail: string
@@ -281,7 +310,11 @@ function buildRow(etf: EtfSnapshot): {
 }
 
 /** 主入口：从看板快照生成散户情绪反向判决。 */
-export function judgeRetailSentiment(etfs: EtfSnapshot[]): RetailVerdict {
+export function judgeRetailSentiment(
+  etfs: EtfSnapshot[],
+  marginHistory: MarginPoint[] = [],
+  marketHistory: MarketActiveCapPoint[] = [],
+): RetailVerdict {
   const cautions: string[] = []
   const rows: RetailEtfRow[] = []
 
@@ -328,12 +361,44 @@ export function judgeRetailSentiment(etfs: EtfSnapshot[]): RetailVerdict {
     rows.map((r) => r.turnoverPercentile).filter((v): v is number => v != null),
   )
   const turnoverTempLabel = turnoverLabel(turnoverPctMedian)
+
+  // 杠杆温度：融资买入额 / 沪深成交额（marketAmountYi 亿元），公共日交集
+  const amountByDate = new Map(
+    marketHistory.map((p) => [p.date, p.marketAmountYi]),
+  )
+  const buyRatioSeries = marginHistory
+    .map((p) => {
+      const amountYuan = amountByDate.get(p.date)
+      if (amountYuan == null || amountYuan <= 0) return null
+      return { date: p.date, ratio: (p.rzmre / (amountYuan * 1e8)) * 100 }
+    })
+    .filter((x): x is { date: string; ratio: number } => x != null)
+  const lastRatio = buyRatioSeries.at(-1)?.ratio ?? null
+  const ratioHistory = buyRatioSeries
+    .slice(-(TURNOVER_LOOKBACK + 1), -1)
+    .map((x) => x.ratio)
+  const marginPercentile =
+    lastRatio != null && ratioHistory.length >= TURNOVER_MIN_HISTORY
+      ? percentileRank(lastRatio, ratioHistory)
+      : null
+  const marginTemp = marginTemperature(marginPercentile)
+  let marginBalanceChange5d: number | null = null
+  if (marginHistory.length >= 6) {
+    const last = marginHistory.at(-1)!
+    const base = marginHistory.at(-6)!
+    if (base.rzye > 0) {
+      marginBalanceChange5d = Number(
+        (((last.rzye / base.rzye) - 1) * 100).toFixed(2),
+      )
+    }
+  }
   const huijinTone = majorityHuijinTone(
     collectForceInputs(etfs, []).etfs.map((e) => e.shareTrend),
   )
   const quadrant = crossQuadrant(mood, huijinTone, temperature)
   cautions.push('非汇金资金含机构、游资与散户，散户只是主要成分之一，不是全部')
   cautions.push('换手率历史自接入日起积累，分位在积累不足 30 日时不可用')
+  cautions.push('两融是全市场口径，无法拆分到宽基 ETF 成分')
 
   return {
     mood,
@@ -342,6 +407,9 @@ export function judgeRetailSentiment(etfs: EtfSnapshot[]): RetailVerdict {
     temperaturePercentile: tempPercentile,
     turnoverLabel: turnoverTempLabel,
     turnoverPercentile: turnoverPctMedian,
+    marginLabel: marginTemp.label,
+    marginPercentile,
+    marginBalanceChangePct5d: marginBalanceChange5d,
     quadrant,
     quadrantLabel: QUADRANT_LABEL[quadrant],
     detail: quadrantDetail(quadrant, mood, huijinTone, temperature),

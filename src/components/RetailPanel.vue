@@ -1,16 +1,24 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { EtfSnapshot } from '../../shared/types'
+import type {
+  EtfSnapshot,
+  MarginPoint,
+  MarketActiveCapPoint,
+} from '../../shared/types'
 import { judgeRetailSentiment } from '../utils/retailSignals'
 
 const props = withDefaults(
   defineProps<{
     etfs?: EtfSnapshot[]
+    marginHistory?: MarginPoint[]
+    marketHistory?: MarketActiveCapPoint[]
   }>(),
-  { etfs: () => [] },
+  { etfs: () => [], marginHistory: () => [], marketHistory: () => [] },
 )
 
-const verdict = computed(() => judgeRetailSentiment(props.etfs))
+const verdict = computed(() =>
+  judgeRetailSentiment(props.etfs, props.marginHistory, props.marketHistory),
+)
 
 const temperatureText = computed(() => {
   const v = verdict.value
@@ -34,6 +42,19 @@ const turnoverText = computed(() => {
   return v.turnoverPercentile == null
     ? v.turnoverLabel
     : `${v.turnoverLabel} · ${v.turnoverPercentile.toFixed(0)} 分位`
+})
+
+const marginText = computed(() => {
+  const v = verdict.value
+  const base =
+    v.marginPercentile == null
+      ? v.marginLabel
+      : `${v.marginLabel} · ${v.marginPercentile.toFixed(0)} 分位`
+  const change =
+    v.marginBalanceChangePct5d == null
+      ? ''
+      : `（余额 5 日 ${v.marginBalanceChangePct5d > 0 ? '+' : ''}${v.marginBalanceChangePct5d.toFixed(2)}%）`
+  return base + change
 })
 
 const MOOD_TEXT: Record<string, string> = {
@@ -96,6 +117,11 @@ const rows = computed(() =>
         <div class="insight-label">交投温度</div>
         <div class="insight-value">{{ turnoverText }}</div>
         <div class="insight-detail muted">场内换手率中位分位（250 日回看）</div>
+      </div>
+      <div class="force-verdict-gate" :data-hot="verdict.marginLabel">
+        <div class="insight-label">杠杆温度</div>
+        <div class="insight-value">{{ marginText }}</div>
+        <div class="insight-detail muted">融资买入占成交额比分位（250 日）</div>
       </div>
     </div>
 

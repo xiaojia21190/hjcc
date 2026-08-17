@@ -1,5 +1,10 @@
 import { describe, expect, test } from 'bun:test'
-import type { EtfSnapshot, HuijinEstimatePoint, ScalePoint } from '../../shared/types'
+import type {
+  EtfSnapshot,
+  HuijinEstimatePoint,
+  MarginPoint,
+  ScalePoint,
+} from '../../shared/types'
 import {
   CHASE_PCT_5D,
   COLD_PERCENTILE,
@@ -7,6 +12,7 @@ import {
   HOT_PERCENTILE,
   judgeMood,
   judgeRetailSentiment,
+  marginTemperature,
   temperatureLabel,
   turnoverLabel,
   type MoodInput,
@@ -169,6 +175,50 @@ describe('judgeRetailSentiment 交投温度', () => {
     const r = judgeRetailSentiment([makeEtf({ name: '沪深300', turnover })])
     expect(r.turnoverPercentile).toBe(100)
     expect(r.turnoverLabel).toBe('亢奋')
+  })
+})
+
+function marginPoint(date: string, rzmre: number): MarginPoint {
+  return { date, rzye: 2.5e12, rzmre, rzrqye: 2.55e12, rzyezb: 2.5 }
+}
+
+describe('marginTemperature', () => {
+  test('买入占比分位边界', () => {
+    expect(marginTemperature(null).label).toBe('样本不足')
+    expect(marginTemperature(90).label).toBe('杠杆过热')
+    expect(marginTemperature(85).label).toBe('杠杆过热')
+    expect(marginTemperature(70).label).toBe('加杠杆')
+    expect(marginTemperature(50).label).toBe('常态')
+    expect(marginTemperature(15).label).toBe('降杠杆')
+    expect(marginTemperature(10).label).toBe('降杠杆')
+  })
+})
+
+describe('judgeRetailSentiment 两融维度', () => {
+  test('空 marginHistory 不崩溃且为样本不足', () => {
+    const r = judgeRetailSentiment([makeEtf({ name: '沪深300' })], [])
+    expect(r.marginLabel).toBe('样本不足')
+  })
+
+  test('40 日融资买入占比末日冲高 → 杠杆过热', () => {
+    const etf = makeEtf({ name: '沪深300' })
+    const margin = Array.from({ length: 40 }, (_, i) =>
+      marginPoint(
+        `2026-${String(Math.floor(i / 28) + 6).padStart(2, '0')}-${String((i % 28) + 1).padStart(2, '0')}`,
+        i === 39 ? 4000e8 : 2000e8,
+      ),
+    )
+    // 买入占比需要与市场成交额按日期对齐，同日给恒定成交额
+    const market = margin.map((p) => ({
+      date: p.date,
+      activeCapYi: 100,
+      marketIndex: 100,
+      marketAmountYi: 10000,
+      referenceMaYi: null,
+    }))
+    const r = judgeRetailSentiment([etf], margin, market)
+    expect(r.marginPercentile).toBe(100)
+    expect(r.marginLabel).toBe('杠杆过热')
   })
 })
 
