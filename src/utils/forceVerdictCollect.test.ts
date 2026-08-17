@@ -27,6 +27,7 @@ function snapshot(partial: Partial<EtfSnapshot> & { categoryName: string }): Etf
     isLargest: true,
     scaleHistory: [],
     navHistory: [],
+    turnoverHistory: [],
     holderReports: [],
     huijinHistory: [],
     latestHuijin: {

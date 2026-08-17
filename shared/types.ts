@@ -27,6 +27,19 @@ export interface EtfQuote {
   /** 流通市值（元） */
   floatCap: number | null
   market: 'SH' | 'SZ'
+  /** 当日场内换手率（%），fltt=2 下为真实值；缺失为 null */
+  turnoverPct?: number | null
+  /** 当日场内成交额（元）；缺失为 null */
+  amountYuan?: number | null
+}
+
+/** 场内换手率历史点；由每日快照 append 积累，无回填。 */
+export interface TurnoverPoint {
+  date: string
+  /** 场内换手率（%），f8 口径 */
+  turnoverPct: number | null
+  /** 场内成交额（元） */
+  amountYuan: number | null
 }
 
 export interface HolderRow {
@@ -178,6 +191,8 @@ export interface EtfSnapshot {
   isLargest: boolean
   scaleHistory: ScalePoint[]
   navHistory: NavPoint[]
+  /** 场内换手率历史（每日快照积累，无历史回填） */
+  turnoverHistory: TurnoverPoint[]
   holderReports: HolderReport[]
   huijinHistory: HuijinPosition[]
   latestHuijin: HuijinPosition | null

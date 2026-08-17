@@ -14,6 +14,7 @@ function minimalDashboard(overrides: Partial<DashboardData> = {}): DashboardData
         { date: '2024-01-04', totalSharesYi: 102, netAssetYi: 152, purchaseYi: null, redeemYi: null, netSubscriptionYi: 2, netAssetChangePct: null, frequency: 'daily', shareSource: 'sse', netAssetEstimated: true },
       ],
       navHistory: Array.from({ length: 1400 }, (_, i) => ({ date: `2020-01-${String(i % 28 + 1).padStart(2, '0')}`, nav: 1, accNav: 1, changePct: null })),
+      turnoverHistory: [],
       holderReports: [{ reportDate: '2025-12-31', holders: [], huijinShares: 100, huijinPercent: 50 }],
       huijinHistory: [], latestHuijin: null, huijinEstimateHistory: [],
       source: { holders: '', scale: '', quote: '', huijinEstimate: '', fetchedAt: '' },
