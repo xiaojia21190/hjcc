@@ -7,6 +7,7 @@
     "test": "bun test",
     "audit": "bun run scripts/data-audit.ts",
     "calibrate": "bun run scripts/calibrate-mainline.ts",
+    "calibrate:retail": "bun run scripts/calibrate-retail.ts",
     "build": "vue-tsc -b && vite build",
     "preview": "vite preview",
     "fetch": "bun run scripts/fetch-data.ts",
