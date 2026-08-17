@@ -43,6 +43,7 @@ import {
 import { sleep } from './sources/http'
 import { mergeTurnoverHistory } from './lib/turnover'
 import { fetchSectorTrend } from './sources/sector'
+import { fetchMarginHistory } from './sources/margin'
 import { fetchAllHolderReports } from './sources/sina'
 import { fetchSseDailyShares, type OfficialDailySharePoint } from './sources/sse'
 import { fetchSzseDailyShares } from './sources/szse'
@@ -408,6 +409,18 @@ async function main() {
   console.log(`共 ${universe.length} 只 ETF`)
   console.log(`0AMV 市场日线 ${marketActiveCapHistory.length} 条`)
 
+  console.log('抓取沪深两融市场合计…')
+  let marginHistory = previous?.marginHistory ?? []
+  try {
+    const fetched = await fetchMarginHistory()
+    marginHistory = fetched
+    console.log(
+      `两融历史 ${fetched.length} 日（${fetched[0]!.date} → ${fetched.at(-1)!.date}）`,
+    )
+  } catch (error) {
+    console.warn('两融抓取失败，沿用上次快照', error)
+  }
+
   // 板块日线要打数十个 push2his 请求，与 0AMV 同域名。必须等 0AMV 完成后再串行
   // 发起，否则叠加的请求量会触发东财域名级限流，把 0AMV 一起拖失败。
   console.log('抓取行业板块日线…')
@@ -503,6 +516,7 @@ async function main() {
     marketActiveCapSource:
       '指南针 0AMV（活筹指数）公开近似公式：SMA(沪深两市成交额,10,1) × 中证全指收盘 / 前5日中证全指均值；价格代理来自东方财富中证全指 000985，成交额为上证综指 000001 与深证成指 399001 日成交额之和。指南针原版算法未公开，本序列用于观察方向和趋势，不等同于 ETF 份额、基金净资产或官方 0AMV 绝对值。',
     marketActiveCapQuality: marketActiveCapResolution.quality,
+    marginHistory,
     sectorTrend,
     summary: {
       totalHuijinMarketValue: totalMv,
