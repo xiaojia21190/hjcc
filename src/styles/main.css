@@ -1314,3 +1314,57 @@ tr:focus-visible {
     animation: none;
   }
 }
+
+/* 散户情绪反向面板：闸格复用 force-verdict 布局，仅加状态色 */
+.retail-grid .force-verdict-primary[data-quadrant='contrarian-bull'] .insight-value {
+  color: var(--accent-2);
+}
+
+.retail-grid .force-verdict-primary[data-quadrant='contrarian-warn'] .insight-value {
+  color: var(--tier-other);
+}
+
+.retail-grid .force-verdict-gate[data-mood='chasing'] .insight-value {
+  color: var(--up);
+}
+
+.retail-grid .force-verdict-gate[data-mood='capitulating'] .insight-value {
+  color: var(--accent-2);
+}
+
+.retail-grid .force-verdict-gate[data-hot='高热'] .insight-value,
+.retail-grid .force-verdict-gate[data-hot='偏热'] .insight-value {
+  color: var(--up);
+}
+
+.retail-grid .force-verdict-gate[data-hot='冰点'] .insight-value,
+.retail-grid .force-verdict-gate[data-hot='偏冷'] .insight-value {
+  color: var(--accent-2);
+}
+
+.retail-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  margin: 4px 0 10px;
+}
+
+.retail-table th,
+.retail-table td {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--line);
+  text-align: right;
+}
+
+.retail-table th:first-child,
+.retail-table td:first-child {
+  text-align: left;
+}
+
+.retail-table td[data-mood='chasing'] {
+  color: var(--up);
+}
+
+.retail-table td[data-mood='capitulating'] {
+  color: var(--accent-2);
+}

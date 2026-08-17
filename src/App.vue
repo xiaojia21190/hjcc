@@ -20,6 +20,7 @@ import EtfDetail from './components/EtfDetail.vue'
 import DataQualityBar from './components/DataQualityBar.vue'
 import ForceBriefingPanel from './components/ForceBriefingPanel.vue'
 import ForceVerdictPanel from './components/ForceVerdictPanel.vue'
+import RetailPanel from './components/RetailPanel.vue'
 import { downloadEtfCsv, downloadMarketCsv } from './utils/dashboardExport'
 import { formatDateTime } from './utils/format'
 import { waitForRefresh } from './utils/refreshWait'
@@ -222,6 +223,8 @@ onBeforeUnmount(() => {
           :etfs="etfs"
           :market-history="data.marketActiveCapHistory ?? []"
         />
+
+        <RetailPanel v-if="data" :etfs="etfs" />
 
         <section class="card panel">
           <div class="panel-head">

@@ -45,6 +45,7 @@ function makeEtf(partial: {
     history.push(scalePoint(`2025-${month}-${day}`, total, netSub))
   }
   const hasDisclosure = partial.withDisclosure ?? true
+  const shareTrend = partial.shareTrend ?? null
   const estimate: HuijinEstimatePoint[] = hasDisclosure
     ? history.map((p, i) => ({
         date: p.date,
@@ -57,8 +58,10 @@ function makeEtf(partial: {
         estimateMethod: 'anchored' as const,
         huijinSharesFloor: p.totalSharesYi * 0.3,
         huijinSharesCeil: p.totalSharesYi * 0.5,
-        shareTrend:
-          i === history.length - 1 ? (partial.shareTrend ?? null) : null,
+        // 仅末点带方向，其余点省略字段（类型为可选，非 null）
+        ...(i === history.length - 1 && shareTrend != null
+          ? { shareTrend }
+          : {}),
       }))
     : history.map((p) => ({
         date: p.date,
