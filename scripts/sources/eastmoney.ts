@@ -401,6 +401,74 @@ export async function fetchQuotesByCandidates(): Promise<EtfQuote[]> {
   return out
 }
 
+// ---------- 场内换手率快照（push2delay ulist.np 批量）----------
+
+interface UlistResponse {
+  data?: {
+    diff?: {
+      f12: string
+      f14: string
+      f2: number | string
+      f3: number | string
+      f6: number | string
+      f8: number | string
+    }[]
+  } | null
+}
+
+const TURNOVER_HOSTS = [
+  'https://push2delay.eastmoney.com',
+  'https://push2.eastmoney.com',
+]
+
+/**
+ * 批量拉取指定代码的实时换手率与成交额。
+ * f8 在 fltt=2 下已是真实百分数（如 3.46 = 3.46%），无需再除以 100；
+ * 已用 510300 份额/价格交叉验证口径（场内成交量 / 基金总份额）。
+ * 返回 code → {date, turnoverPct, amountYuan}；两域名均失败返回空 Map，不抛出。
+ */
+export async function fetchTurnoverSnapshot(
+  codes: string[],
+  asOfDate: string,
+): Promise<
+  Map<string, { date: string; turnoverPct: number | null; amountYuan: number | null }>
+> {
+  const out = new Map<
+    string,
+    { date: string; turnoverPct: number | null; amountYuan: number | null }
+  >()
+  if (codes.length === 0) return out
+  const secids = codes
+    .map(
+      (code) =>
+        `${code.startsWith('15') || code.startsWith('16') ? '0' : '1'}.${code}`,
+    )
+    .join(',')
+  let lastError: unknown = null
+  for (const host of TURNOVER_HOSTS) {
+    try {
+      const url = `${host}/api/qt/ulist.np/get?secids=${secids}&fltt=2&fields=f12,f14,f2,f3,f6,f8`
+      const json = await fetchJson<UlistResponse>(url, 'https://quote.eastmoney.com/')
+      const rows = json.data?.diff ?? []
+      if (rows.length === 0) throw new Error(`${host} ulist 返回空 diff`)
+      for (const row of rows) {
+        const num = (v: number | string | undefined) =>
+          v === '-' || v == null || v === '' ? null : Number(v)
+        out.set(String(row.f12), {
+          date: asOfDate,
+          turnoverPct: num(row.f8),
+          amountYuan: num(row.f6),
+        })
+      }
+      return out
+    } catch (error) {
+      lastError = error
+    }
+  }
+  console.warn('换手率快照两域名均失败', lastError)
+  return out
+}
+
 /** 每类别选出规模最大的宽基 ETF */
 export async function pickLargestPerCategory(universe: EtfQuote[]) {
   const picked: {

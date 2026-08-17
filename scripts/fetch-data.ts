@@ -11,6 +11,7 @@ import type {
   EtfSnapshot,
   MarketActiveCapPoint,
   MarketActiveCapQuality,
+  TurnoverPoint,
 } from '../shared/types'
 import {
   computeOfficialFetchDates,
@@ -35,10 +36,12 @@ import {
   fetchMarketActiveCapHistory,
   fetchNavHistory,
   fetchScaleHistory,
+  fetchTurnoverSnapshot,
   mergeQuoteWithPrevious,
   pickLargestPerCategory,
 } from './sources/eastmoney'
 import { sleep } from './sources/http'
+import { mergeTurnoverHistory } from './lib/turnover'
 import { fetchSectorTrend } from './sources/sector'
 import { fetchAllHolderReports } from './sources/sina'
 import { fetchSseDailyShares, type OfficialDailySharePoint } from './sources/sse'
@@ -212,6 +215,7 @@ async function buildEtfSnapshot(
   officialDailyShares: OfficialDailySharePoint[],
   previous?: EtfSnapshot,
   shareFetchGaps?: { sseFailedDates?: string[]; szseFailedRanges?: string[] },
+  turnoverHistoryMerged?: TurnoverPoint[],
 ): Promise<EtfSnapshot> {
   const code = quote.code
   console.log(`\n→ ${category.name} ${code} ${quote.name}`)
@@ -278,6 +282,7 @@ async function buildEtfSnapshot(
     huijinHistory,
     latestHuijin,
     huijinEstimateHistory,
+    turnoverHistory: turnoverHistoryMerged ?? [],
     source: {
       holders:
         '新浪财经 FundPageInfoService.tabsdcyr（基金年报/半年报十大持有人）',
@@ -417,6 +422,28 @@ async function main() {
     )
   }
 
+  // 场内换手率快照：6 只一包，一次 ulist 请求；失败不阻塞主流程
+  const turnoverAsOf = marketActiveCapHistory.at(-1)?.date ?? null
+  const turnoverSnapshot = turnoverAsOf
+    ? await fetchTurnoverSnapshot(
+        picked.map((p) => p.quote.code),
+        turnoverAsOf,
+      )
+    : new Map<
+        string,
+        { date: string; turnoverPct: number | null; amountYuan: number | null }
+      >()
+  console.log(
+    `场内换手率快照 ${turnoverSnapshot.size}/${picked.length} 只（asOf=${turnoverAsOf ?? '无交易日'}）`,
+  )
+  for (const p of picked) {
+    const t = turnoverSnapshot.get(p.quote.code)
+    if (t) {
+      p.quote.turnoverPct = t.turnoverPct
+      p.quote.amountYuan = t.amountYuan
+    }
+  }
+
   console.log('抓取交易所 ETF 每日总份额…')
   const { histories: officialShareHistories, gaps: shareFetchGaps } =
     await fetchOfficialShareHistories(
@@ -437,6 +464,12 @@ async function main() {
         officialShareHistories.get(p.quote.code) ?? [],
         previous?.etfs.find((e) => e.code === p.quote.code),
         shareFetchGaps.get(p.quote.code),
+        mergeTurnoverHistory(
+          previous?.etfs.find((e) => e.code === p.quote.code)?.turnoverHistory ?? [],
+          turnoverSnapshot.has(p.quote.code)
+            ? [turnoverSnapshot.get(p.quote.code)!]
+            : [],
+        ),
       )
       etfs.push(snap)
       await sleep(300)
