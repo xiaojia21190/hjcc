@@ -8,6 +8,7 @@ import {
   judgeMood,
   judgeRetailSentiment,
   temperatureLabel,
+  turnoverLabel,
   type MoodInput,
 } from './retailSignals'
 
@@ -32,6 +33,7 @@ function makeEtf(partial: {
   dailyRatePct?: number
   shareTrend?: 'inflow' | 'outflow' | 'flat' | null
   withDisclosure?: boolean
+  turnover?: { date: string; turnoverPct: number | null; amountYuan: number | null }[]
 }): EtfSnapshot {
   const dailyRatePct = partial.dailyRatePct ?? 0
   const history: ScalePoint[] = []
@@ -91,6 +93,7 @@ function makeEtf(partial: {
     isLargest: true,
     scaleHistory: history,
     navHistory: [],
+    turnoverHistory: partial.turnover ?? [],
     holderReports: [],
     huijinHistory: [],
     latestHuijin: hasDisclosure
@@ -127,6 +130,45 @@ describe('temperatureLabel', () => {
     expect(temperatureLabel(30)).toBe('偏冷')
     expect(temperatureLabel(COLD_PERCENTILE)).toBe('冰点')
     expect(temperatureLabel(null)).toBe('样本不足')
+  })
+})
+
+describe('turnoverLabel', () => {
+  test('交投温度边界', () => {
+    expect(turnoverLabel(null)).toBe('样本不足')
+    expect(turnoverLabel(90)).toBe('亢奋')
+    expect(turnoverLabel(85)).toBe('亢奋')
+    expect(turnoverLabel(70)).toBe('活跃')
+    expect(turnoverLabel(50)).toBe('常态')
+    expect(turnoverLabel(15)).toBe('低迷')
+    expect(turnoverLabel(10)).toBe('低迷')
+  })
+})
+
+describe('judgeRetailSentiment 交投温度', () => {
+  test('换手历史不足 30 日为样本不足', () => {
+    const etf = makeEtf({
+      name: '沪深300',
+      turnover: Array.from({ length: 10 }, (_, i) => ({
+        date: `2026-07-${String(i + 1).padStart(2, '0')}`,
+        turnoverPct: 3,
+        amountYuan: 4e9,
+      })),
+    })
+    const r = judgeRetailSentiment([etf])
+    expect(r.turnoverLabel).toBe('样本不足')
+    expect(r.turnoverPercentile).toBeNull()
+  })
+
+  test('40 日恒定 3% 换手 + 末日 12% → 亢奋 100 分位', () => {
+    const turnover = Array.from({ length: 40 }, (_, i) => ({
+      date: `2026-${String(Math.floor(i / 28) + 6).padStart(2, '0')}-${String((i % 28) + 1).padStart(2, '0')}`,
+      turnoverPct: i === 39 ? 12 : 3,
+      amountYuan: 4e9,
+    }))
+    const r = judgeRetailSentiment([makeEtf({ name: '沪深300', turnover })])
+    expect(r.turnoverPercentile).toBe(100)
+    expect(r.turnoverLabel).toBe('亢奋')
   })
 })
 

@@ -22,6 +22,14 @@ export const PERCENTILE_LOOKBACK = 250
 export const HOT_PERCENTILE = 85
 /** 分位 ≤ 此值视为冰点。 */
 export const COLD_PERCENTILE = 15
+/** 换手率分位回看窗口（交易日）。 */
+export const TURNOVER_LOOKBACK = 250
+/** 换手历史少于此天数不做分位（历史从接入日起积累）。 */
+export const TURNOVER_MIN_HISTORY = 30
+/** 换手分位 ≥ 此值视为亢奋。 */
+export const TURNOVER_HOT = 85
+/** 换手分位 ≤ 此值视为低迷。 */
+export const TURNOVER_COLD = 15
 
 export const DISCLAIMER =
   '不能识别持有人 · 只描述申赎行为 · 反向解读仅是假设 · 不构成投资建议'
@@ -69,6 +77,16 @@ export function temperatureLabel(percentile: number | null): string {
   return '中性'
 }
 
+/** 交投温度标签（场内换手率分位）；null 表示样本不足。 */
+export function turnoverLabel(percentile: number | null): string {
+  if (percentile == null) return '样本不足'
+  if (percentile >= TURNOVER_HOT) return '亢奋'
+  if (percentile >= 65) return '活跃'
+  if (percentile <= TURNOVER_COLD) return '低迷'
+  if (percentile <= 35) return '清淡'
+  return '常态'
+}
+
 export interface RetailEtfRow {
   categoryName: string
   code: string
@@ -82,6 +100,10 @@ export interface RetailEtfRow {
   otherYi: number | null
   /** 其他资金份额 5 日变化率（%）；anchored 段不足 6 点为 null。 */
   otherChangePct5d: number | null
+  /** 最新场内换手率（%）。 */
+  turnoverPct: number | null
+  /** 换手率 250 日分位；历史不足为 null。 */
+  turnoverPercentile: number | null
 }
 
 export interface RetailVerdict {
@@ -91,6 +113,10 @@ export interface RetailVerdict {
   temperatureLabel: string
   /** 中位分位（0-100），供展示。 */
   temperaturePercentile: number | null
+  /** 场内换手率分位中位数对应的交投温度。 */
+  turnoverLabel: string
+  /** 换手分位中位数（0-100）。 */
+  turnoverPercentile: number | null
   quadrant: CrossQuadrant
   quadrantLabel: string
   detail: string
@@ -225,6 +251,18 @@ function buildRow(etf: EtfSnapshot): {
     }
   }
 
+  const turnoverHistory = etf.turnoverHistory ?? []
+  const lastTurnover = turnoverHistory.at(-1)
+  const turnoverHistoryRates = turnoverHistory
+    .slice(-(TURNOVER_LOOKBACK + 1), -1)
+    .map((p) => p.turnoverPct)
+    .filter((v): v is number => v != null)
+  const turnoverPercentile =
+    lastTurnover?.turnoverPct != null &&
+    turnoverHistoryRates.length >= TURNOVER_MIN_HISTORY
+      ? percentileRank(lastTurnover.turnoverPct, turnoverHistoryRates)
+      : null
+
   return {
     row: {
       categoryName: etf.categoryName,
@@ -235,6 +273,8 @@ function buildRow(etf: EtfSnapshot): {
       mood: judgeMood({ categoryName: etf.categoryName, netSub5dPct }),
       otherYi: lastOther?.otherYi ?? null,
       otherChangePct5d,
+      turnoverPct: lastTurnover?.turnoverPct ?? null,
+      turnoverPercentile,
     },
     lastOtherYi: lastOther?.otherYi ?? null,
   }
@@ -284,17 +324,24 @@ export function judgeRetailSentiment(etfs: EtfSnapshot[]): RetailVerdict {
     rows.map((r) => r.netSubPercentile).filter((v): v is number => v != null),
   )
   const temperature = temperatureLabel(tempPercentile)
+  const turnoverPctMedian = median(
+    rows.map((r) => r.turnoverPercentile).filter((v): v is number => v != null),
+  )
+  const turnoverTempLabel = turnoverLabel(turnoverPctMedian)
   const huijinTone = majorityHuijinTone(
     collectForceInputs(etfs, []).etfs.map((e) => e.shareTrend),
   )
   const quadrant = crossQuadrant(mood, huijinTone, temperature)
   cautions.push('非汇金资金含机构、游资与散户，散户只是主要成分之一，不是全部')
+  cautions.push('换手率历史自接入日起积累，分位在积累不足 30 日时不可用')
 
   return {
     mood,
     moodLabel: MOOD_LABEL[mood],
     temperatureLabel: temperature,
     temperaturePercentile: tempPercentile,
+    turnoverLabel: turnoverTempLabel,
+    turnoverPercentile: turnoverPctMedian,
     quadrant,
     quadrantLabel: QUADRANT_LABEL[quadrant],
     detail: quadrantDetail(quadrant, mood, huijinTone, temperature),

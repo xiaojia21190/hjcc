@@ -29,6 +29,13 @@ const otherTotalText = computed(() => {
   return `${v.otherTotalYi.toFixed(1)} 亿份${change}`
 })
 
+const turnoverText = computed(() => {
+  const v = verdict.value
+  return v.turnoverPercentile == null
+    ? v.turnoverLabel
+    : `${v.turnoverLabel} · ${v.turnoverPercentile.toFixed(0)} 分位`
+})
+
 const MOOD_TEXT: Record<string, string> = {
   chasing: '追涨',
   capitulating: '杀跌',
@@ -45,6 +52,8 @@ const rows = computed(() =>
         : `${row.netSub5dPct > 0 ? '+' : ''}${row.netSub5dPct.toFixed(2)}%`,
     percentileText: row.netSubPercentile == null ? '—' : row.netSubPercentile.toFixed(0),
     otherText: row.otherYi == null ? '无披露' : `${row.otherYi.toFixed(1)} 亿份`,
+    turnoverText:
+      row.turnoverPct == null ? '—' : `${row.turnoverPct.toFixed(2)}%`,
     moodText: row.mood == null ? '—' : MOOD_TEXT[row.mood]!,
   })),
 )
@@ -83,6 +92,11 @@ const rows = computed(() =>
         <div class="insight-value">{{ otherTotalText }}</div>
         <div class="insight-detail muted">总份额 − 汇金估算，有披露的 ETF 合计</div>
       </div>
+      <div class="force-verdict-gate" :data-hot="verdict.turnoverLabel">
+        <div class="insight-label">交投温度</div>
+        <div class="insight-value">{{ turnoverText }}</div>
+        <div class="insight-detail muted">场内换手率中位分位（250 日回看）</div>
+      </div>
     </div>
 
     <table class="retail-table">
@@ -92,6 +106,7 @@ const rows = computed(() =>
           <th>5 日净申购率</th>
           <th>分位</th>
           <th>情绪</th>
+          <th>换手%</th>
           <th>其他资金份额</th>
         </tr>
       </thead>
@@ -101,6 +116,7 @@ const rows = computed(() =>
           <td>{{ row.netSub5dText }}</td>
           <td>{{ row.percentileText }}</td>
           <td :data-mood="row.mood">{{ row.moodText }}</td>
+          <td>{{ row.turnoverText }}</td>
           <td>{{ row.otherText }}</td>
         </tr>
       </tbody>
