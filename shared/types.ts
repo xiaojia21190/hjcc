@@ -153,6 +153,19 @@ export interface MarketActiveCapQuality {
   warning: string | null
 }
 
+/** 沪深两融市场合计日频点。 */
+export interface MarginPoint {
+  date: string
+  /** 融资余额（元） */
+  rzye: number
+  /** 融资买入额（元） */
+  rzmre: number
+  /** 两融余额（元） */
+  rzrqye: number
+  /** 融资余额占流通市值比（%） */
+  rzyezb: number | null
+}
+
 /** 持有人报告期事件；不是公告发布日期。 */
 export interface MarketReportEvent {
   date: string
@@ -221,6 +234,8 @@ export interface DashboardData {
   etfs: EtfSnapshot[]
   /** 沪深市场 0AMV 活筹指数估算序列，不属于任何单只 ETF。 */
   marketActiveCapHistory: MarketActiveCapPoint[]
+  /** 沪深两融市场合计历史；抓取失败时沿用上次快照 */
+  marginHistory?: MarginPoint[]
   /** 0AMV 的定义、计算口径和数据来源说明。 */
   marketActiveCapSource: string
   /** 0AMV 本次抓取实际使用的来源和截止日期；旧快照可能没有此字段。 */
