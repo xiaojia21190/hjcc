@@ -271,10 +271,17 @@ try {
       marketAmountYi: Number((point.amount / 1e8).toFixed(2)),
     })
   }
-  if (externalCalculated.length !== market.length) errors.push('external market history length mismatch')
-  for (let index = 0; index < Math.min(externalCalculated.length, market.length); index++) {
-    const external = externalCalculated[index]
-    const cached = market[index]
+  // 盘中运行时（GitHub 定时任务延迟可能落入北京时间交易时段）最后一根 K 线
+  // 随成交实时漂移，fetch 与 audit 两次抓取必然不等，曾导致多次盘中部署误判
+  // 失败。交叉校验只比对已完结交易日；当日点仍由上方内部校验覆盖（排序、
+  // 数值有效性、参考线、summary 一致性）。
+  const todayBeijing = new Date(Date.now() + 8 * 3600_000).toISOString().slice(0, 10)
+  const settledExternal = externalCalculated.filter((point) => point.date < todayBeijing)
+  const settledMarket = market.filter((point) => point.date < todayBeijing)
+  if (settledExternal.length !== settledMarket.length) errors.push('external market history length mismatch')
+  for (let index = 0; index < Math.min(settledExternal.length, settledMarket.length); index++) {
+    const external = settledExternal[index]
+    const cached = settledMarket[index]
     if (external.date !== cached.date || external.activeCapYi !== cached.activeCapYi || external.marketIndex !== cached.marketIndex || external.marketAmountYi !== cached.marketAmountYi) {
       errors.push(`${cached.date}: market history differs from external source/formula`)
       break
