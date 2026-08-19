@@ -6,3 +6,6 @@ dist
 .env.*
 .vite
 tsconfig.tsbuildinfo
+# GitHub workflow run logs 下载产物（无权限时返回 JSON 错误体，文件名仍带 .zip）
+.logs_check.zip
+.logs_check.zip.*

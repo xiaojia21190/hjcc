@@ -139,6 +139,7 @@ export interface MarketActiveCapPoint {
 }
 
 export type MarketActiveCapDataSource =
+  | 'tdx'
   | 'eastmoney-history'
   | 'tushare-history'
   | 'latest-snapshot'

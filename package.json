@@ -21,6 +21,7 @@
   },
   "dependencies": {
     "echarts": "^5.6.0",
+    "node-tdx-market": "^0.2.1",
     "vue": "^3.5.13",
     "vue-router": "^4.5.0"
   },

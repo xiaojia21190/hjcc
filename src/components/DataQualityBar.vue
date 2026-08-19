@@ -11,6 +11,8 @@ type QualityTone = 'ok' | 'partial' | 'warn'
 
 function marketSourceLabel(source?: string): string {
   switch (source) {
+    case 'tdx':
+      return '通达信历史日线'
     case 'eastmoney-history':
       return '东财历史日线'
     case 'tushare-history':

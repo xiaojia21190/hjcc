@@ -42,12 +42,14 @@ import {
 } from './sources/eastmoney'
 import { sleep } from './sources/http'
 import { mergeTurnoverHistory } from './lib/turnover'
+import { fetchTdxTurnoverBackfill } from './sources/tdx'
 import { fetchSectorTrend } from './sources/sector'
 import { fetchMarginHistory } from './sources/margin'
 import { fetchAllHolderReports } from './sources/sina'
 import { fetchSseDailyShares, type OfficialDailySharePoint } from './sources/sse'
 import { fetchSzseDailyShares } from './sources/szse'
 import { fetchLatestMarketActiveCapHistory } from './sources/market-latest'
+import { fetchTdxMarketActiveCapHistory } from './sources/tdx'
 import { fetchTushareMarketSeries } from './sources/tushare'
 
 const ROOT = join(import.meta.dir, '..')
@@ -269,6 +271,21 @@ async function buildEtfSnapshot(
       ? disclosedHuijinHistory[disclosedHuijinHistory.length - 1]
       : null
 
+  // tdx 换手率历史回填：用 tdx ETF 日 K 成交量 + 本函数已合并的 scaleHistory
+  // 回算场内换手率，一次性回填 turnoverHistory，解决「只能接入日起积累」痛点。
+  // tdx 不可用或无份额覆盖返回空，与现有快照积累逻辑完全兼容。
+  // 优先级：tdx 回填覆盖旧积累与当日快照（统一 tdx 口径，避免新旧换手率口径混用）；
+  // mergeTurnoverHistory 后者覆盖前者。tdx 不可达时 tdxBackfill 为空，
+  // 退化为原 turnoverHistoryMerged，与改动前行为一致。
+  const tdxBackfill = await fetchTdxTurnoverBackfill(
+    code,
+    scaleHistory.map((p) => ({ date: p.date, totalSharesYi: p.totalSharesYi })),
+  )
+  const turnoverHistory = mergeTurnoverHistory(
+    turnoverHistoryMerged ?? [],
+    tdxBackfill,
+  )
+
   return slimEtfSnapshot({
     category: category.id,
     categoryName: category.name,
@@ -283,7 +300,7 @@ async function buildEtfSnapshot(
     huijinHistory,
     latestHuijin,
     huijinEstimateHistory,
-    turnoverHistory: turnoverHistoryMerged ?? [],
+    turnoverHistory,
     source: {
       holders:
         '新浪财经 FundPageInfoService.tabsdcyr（基金年报/半年报十大持有人）',
@@ -310,10 +327,32 @@ interface MarketActiveCapResolution {
   quality: MarketActiveCapQuality
 }
 
-async function resolveMarketActiveCapHistory(
+export async function resolveMarketActiveCapHistory(
   previous: DashboardData | null,
 ): Promise<MarketActiveCapResolution> {
   const warnings: string[] = []
+
+  // 通达信(tdx) 主源：直连行情服务器，不受东财 HTTP 路径封禁影响，
+  // 翻页可拉到 2013 年（~2800 点），且成交额与东财缓存 99.96% 匹配。
+  // 连不上（CI 环境 / 公网受限）时静默降级东财，不记入 warnings。
+  try {
+    const history = await fetchTdxMarketActiveCapHistory()
+    if (history.length === 0) {
+      throw new Error('tdx 返回空的 0AMV 序列')
+    }
+    return {
+      history,
+      quality: {
+        source: 'tdx',
+        asOf: history.at(-1)?.date ?? null,
+        isPartial: false,
+        warning: null,
+      },
+    }
+  } catch (error) {
+    // tdx 不可达（CI / 网络受限）属预期，降级东财而非告警
+    console.log('tdx 0AMV 主源不可用，降级东财历史日线:', error instanceof Error ? error.message : error)
+  }
 
   try {
     const history = await fetchMarketActiveCapHistory()
