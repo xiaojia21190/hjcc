@@ -3,9 +3,7 @@ import type { DashboardData } from '../../shared/types'
 export const supportsServerRefresh =
   import.meta.env.VITE_STATIC_DEPLOY !== 'true'
 
-/** 前端等待上限，与后端 referenceDurationMs 解耦。 */
-// 实测一轮全量抓取 160–300s，板块补抓失败时逼近 5 分钟；预留余量到 7 分钟。
-export const MAX_WAIT_MS = 420_000
+/** 进度条参考耗时，仅用于进度逼近曲线，不再是放弃上限。 */
 export const DEFAULT_REFERENCE_DURATION_MS = 240_000
 
 export type RefreshStatus = {

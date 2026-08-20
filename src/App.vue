@@ -5,7 +5,6 @@ import {
   DEFAULT_REFERENCE_DURATION_MS,
   fetchRefreshStatus,
   loadDashboard,
-  MAX_WAIT_MS,
   refreshDashboard,
   supportsServerRefresh,
 } from './api/dashboard'
@@ -106,7 +105,6 @@ async function onRefresh() {
     const status = await fetchRefreshStatus()
     const result = await waitForRefresh({
       previousUpdatedAt: data.value?.updatedAt,
-      maxWaitMs: MAX_WAIT_MS,
       referenceMs: status?.referenceDurationMs ?? DEFAULT_REFERENCE_DURATION_MS,
       loadDashboard,
       fetchStatus: fetchRefreshStatus,
@@ -118,10 +116,8 @@ async function onRefresh() {
     if (result.kind === 'updated') {
       applyDashboard(result.dashboard)
       showToast('ok', `已更新至 ${formatDateTime(result.dashboard.updatedAt)}`)
-    } else if (result.kind === 'timeout') {
-      // 后台 fetch 常需 3–5 分钟，超过前端等待上限不等于失败；下次重新加载即可看到新数据
-      showToast('error', '后台抓取仍在进行（全量需 3–5 分钟），请稍后点“重新加载”')
     } else {
+      // failed：server 已 idle 但数据没变，或 server 不可达
       showToast('error', '抓取可能失败，详见服务器日志')
     }
   } catch (e) {
