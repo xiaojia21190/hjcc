@@ -64,6 +64,13 @@ const items = computed(() => {
     latestDailyShareDate != null &&
     earliestDailyShareDate != null &&
     earliestDailyShareDate !== latestDailyShareDate
+  // 份额整体滞后于市场交易日轴：交易所 T 日份额发布晚于收盘行情，
+  // 抓取早于发布时机或当日未发布时，最新 daily 日期会落后于行情末尾日。
+  const marketLastDate = latestMarket?.date ?? null
+  const shareMarketLag =
+    latestDailyShareDate != null &&
+    marketLastDate != null &&
+    latestDailyShareDate < marketLastDate
   const disclosed = etfs.filter((etf) => etf.latestHuijin != null).length
   const cached = etfs.filter((etf) => etf.source.holdersFromCache).length
   const anchoredEtfs = etfs.filter((etf) =>
@@ -110,11 +117,26 @@ const items = computed(() => {
     },
     {
       label: 'ETF 日份额',
-      status: dailyShareCovered === total ? '完整' : '部分可用',
-      detail: shareDateLag
-        ? `${dailyShareCovered}/${total} 只 · 最新 ${latestDailyShareDate} · 个别滞后至 ${earliestDailyShareDate}`
-        : `${dailyShareCovered}/${total} 只 · 最新 ${latestDailyShareDate ?? '—'}`,
-      tone: (dailyShareCovered === total && !shareDateLag ? 'ok' : 'partial') as QualityTone,
+      status: !dailyShareCovered
+        ? '部分可用'
+        : shareMarketLag
+          ? '日期滞后'
+          : shareDateLag
+            ? '部分滞后'
+            : '完整',
+      detail: [
+        `${dailyShareCovered}/${total} 只`,
+        `最新 ${latestDailyShareDate ?? '—'}`,
+        shareMarketLag ? `行情已至 ${marketLastDate}` : null,
+        !shareMarketLag && shareDateLag
+          ? `个别滞后至 ${earliestDailyShareDate}`
+          : null,
+      ]
+        .filter((part): part is string => !!part)
+        .join(' · '),
+      tone: (dailyShareCovered === total && !shareMarketLag && !shareDateLag
+        ? 'ok'
+        : 'partial') as QualityTone,
     },
     {
       label: '汇金披露',

@@ -10,8 +10,10 @@ on:
       - public/dashboard.json
   workflow_dispatch:
   schedule:
-    # 08:30 UTC = 16:30 Asia/Shanghai, Monday through Friday.
-    - cron: '30 0,8 * * 1-5'
+    # 14:00 UTC = 22:00 Asia/Shanghai, Monday through Friday.
+    # 上交所/深交所 ETF T 日总份额通常于 T 日晚间（约 19:00–21:00 北京时间）发布，
+    # 16:30 跑会拿不到当日份额。22:00 抓取可确保���交易所 T 日份额已落地。
+    - cron: '0 14 * * 1-5'
 
 permissions:
   contents: write

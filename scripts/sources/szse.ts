@@ -43,9 +43,12 @@ export async function fetchSzseDailyShares(
   code: string,
   startDate: string,
   endDate: string,
-): Promise<{ points: OfficialDailySharePoint[]; failedRanges: string[] }> {
+): Promise<{ points: OfficialDailySharePoint[]; failedRanges: string[]; fetchedDates: Set<string> }> {
   const points: OfficialDailySharePoint[] = []
   const failedRanges: string[] = []
+  // 记录本次实际拿到数据的日期，供调用方与交易日轴比对，
+  // 识别“请求了但未发布”的日期（深交所 T 日份额常到 T 日晚间才发布）。
+  const fetchedDates = new Set<string>()
   for (const [rangeStart, rangeEnd] of splitDateRanges(startDate, endDate)) {
     let page = 1
     let pageCount = 1
@@ -79,8 +82,10 @@ export async function fetchSzseDailyShares(
             if (!Number.isFinite(sharesWan) || sharesWan < 0 || !row.size_date) {
               continue
             }
+            const d = row.size_date.slice(0, 10)
+            fetchedDates.add(d)
             points.push({
-              date: row.size_date.slice(0, 10),
+              date: d,
               totalSharesYi: Number((sharesWan / 10000).toFixed(6)),
               shareSource: 'szse',
             })
@@ -106,5 +111,5 @@ export async function fetchSzseDailyShares(
       await sleep(80)
     } while (page <= pageCount && !rangeFullyFailed)
   }
-  return { points: mergeOfficialPoints([], points), failedRanges }
+  return { points: mergeOfficialPoints([], points), failedRanges, fetchedDates }
 }

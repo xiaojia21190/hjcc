@@ -10,6 +10,7 @@ export function formatCompletenessReport(data: DashboardData): string {
   let totalSseGaps = 0
   let totalSzseGaps = 0
 
+  const marketLastDate = marketDates.length ? marketDates[marketDates.length - 1] : null
   for (const etf of data.etfs) {
     const daily = etf.scaleHistory.filter((p) => p.frequency === 'daily')
     const dailyDates = new Set(daily.map((p) => p.date))
@@ -24,7 +25,14 @@ export function formatCompletenessReport(data: DashboardData): string {
     const covered = expectedDates.filter((d) => dailyDates.has(d)).length
     const total = expectedDates.length
     const pct = total > 0 ? ((covered / total) * 100).toFixed(1) : '—'
-    const warn = total > 0 && covered / total < 0.95 ? ' ⚠' : ''
+    // 分母按 [首日, 最后一个daily日] 截断会漏掉交易日轴末尾尚未发布的日期，
+    // 造成“该漏的当天不算漏、显示 100%”。把市场交易日轴末尾纳入分母，
+    // 真实暴露 ETF 份额落后于行情末尾日的滞后。
+    const tailMissing =
+      marketLastDate != null && lastDaily != null && lastDaily < marketLastDate
+        ? marketDates.filter((d) => d > lastDaily).length
+        : 0
+    const warn = (total > 0 && covered / total < 0.95) || tailMissing > 0 ? ' ⚠' : ''
 
     // 缺口
     const gaps = etf.source.shareFetchGaps
@@ -36,6 +44,10 @@ export function formatCompletenessReport(data: DashboardData): string {
       gapParts.push(...shown)
       if (extra > 0) gapParts.push(`…等 ${extra + shown.length} 个`)
     }
+    if (gaps?.sseEmptyDates?.length) {
+      totalSseGaps += gaps.sseEmptyDates.length
+      gapParts.push(`未发布 ${gaps.sseEmptyDates.join(',')}`)
+    }
     if (gaps?.szseFailedRanges?.length) {
       totalSzseGaps += gaps.szseFailedRanges.length
       const shown = gaps.szseFailedRanges.slice(0, 10)
@@ -43,10 +55,15 @@ export function formatCompletenessReport(data: DashboardData): string {
       gapParts.push(...shown)
       if (extra > 0) gapParts.push(`…等 ${extra + shown.length} 个`)
     }
+    if (gaps?.szseEmptyDates?.length) {
+      totalSzseGaps += gaps.szseEmptyDates.length
+      gapParts.push(`未发布 ${gaps.szseEmptyDates.join(',')}`)
+    }
 
     const gapStr = gapParts.length ? gapParts.join(', ') : '无'
+    const tailStr = tailMissing > 0 ? ` · 末尾缺 ${tailMissing} 日 (${lastDaily} → ${marketLastDate})` : ''
     lines.push(
-      `${etf.categoryName.padEnd(5)} ${etf.code}  日频 ${covered}/${total} (${pct}%)${warn}  缺口: ${gapStr}`,
+      `${etf.categoryName.padEnd(5)} ${etf.code}  日频 ${covered}/${total} (${pct}%)${warn}  缺口: ${gapStr}${tailStr}`,
     )
   }
 

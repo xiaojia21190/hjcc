@@ -225,6 +225,10 @@ export interface EtfSnapshot {
     shareFetchGaps?: {
       sseFailedDates?: string[]
       szseFailedRanges?: string[]
+      /** 上交所返回 200 但当日 result 为空（份额尚未发布）的日期；下次抓取会重试 */
+      sseEmptyDates?: string[]
+      /** 深交所区间内最后一个查询日未返回数据（份额尚未发布），下次抓取会重试 */
+      szseEmptyDates?: string[]
     }
   }
 }

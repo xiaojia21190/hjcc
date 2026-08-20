@@ -61,6 +61,36 @@ test('缺口列表展示', () => {
   expect(report).toContain('缺口合计: 1 日 (SSE)')
 })
 
+test('未发布日期（HTTP 200 但空）计入 SSE 缺口', () => {
+  const d = minimalDashboard()
+  d.etfs[0]!.source.shareFetchGaps = { sseEmptyDates: ['2024-01-05'] }
+  const report = formatCompletenessReport(d)
+  expect(report).toContain('未发布 2024-01-05')
+  expect(report).toContain('缺口合计: 1 日 (SSE)')
+})
+
+test('份额末尾落后于行情末尾日时报 “末尾缺” 警告', () => {
+  const d = minimalDashboard()
+  // 行情轴延伸到 2024-01-05，ETF 日份额只到 2024-01-04
+  d.marketActiveCapHistory.push({
+    date: '2024-01-05', activeCapYi: 103, marketIndex: 3030, marketAmountYi: 5300, referenceMaYi: null,
+  })
+  const report = formatCompletenessReport(d)
+  const etfLine = report.split('\n').find((line) => line.includes('510050'))!
+  expect(etfLine).toContain('末尾缺 1 日')
+  expect(etfLine).toContain('⚠')
+})
+
+test('SZSE 未发布日期计入深交所缺口', () => {
+  const d = minimalDashboard()
+  d.etfs[0]!.market = 'SZ'
+  d.etfs[0]!.source.shareFetchGaps = { szseEmptyDates: ['2024-01-04'] }
+  const report = formatCompletenessReport(d)
+  expect(report).toContain('未发布 2024-01-04')
+  expect(report).toContain('1 段 (SZSE)')
+  expect(report).toContain('0 日 (SSE) / 1 段 (SZSE)')
+})
+
 test('报告包含行业板块状态', () => {
   const report = formatCompletenessReport(
     minimalDashboard({

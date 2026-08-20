@@ -78,7 +78,7 @@ bun run dev
 
 ## GitHub Pages 自动更新
 
-仓库包含 `.github/workflows/deploy-pages.yml`：GitHub Actions 会在交易日北京时间 16:30（UTC 08:30）抓取公开数据、执行构建与审计，并发布到 GitHub Pages；也可以在 Actions 页面手动运行 `workflow_dispatch`。定时任务会尝试把最新 `data/dashboard.json` 和 `public/dashboard.json` 保存回默认分支，作为下一次抓取的缓存快照。
+仓库包含 `.github/workflows/deploy-pages.yml`：GitHub Actions 会在交易日北京时间 22:00（UTC 14:00）抓取公开数据、执行构建与审计，并发布到 GitHub Pages；也可以在 Actions 页面手动运行 `workflow_dispatch`。选 22:00 是因为上交所/深交所 ETF T 日总份额通常要到 T 日晚间才发布，过早抓取会拿不到当日“份额日期”。定时任务会尝试把最新 `data/dashboard.json` 和 `public/dashboard.json` 保存回默认分支，作为下一次抓取的缓存快照；偶有交易所发布更晚导致当日未抓到时，下一次抓取会自动补齐。
 
 首次使用时，在仓库 Settings → Pages 将 Source 设为 **GitHub Actions**。项目站点地址通常是 `https://<用户名>.github.io/<仓库名>/`；Vite 会根据 Actions 的仓库名自动设置子路径，用户站点仓库 `<用户名>.github.io` 则使用根路径。
 

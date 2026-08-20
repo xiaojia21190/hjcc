@@ -111,10 +111,10 @@ async function fetchOfficialShareHistories(
   marketDates: string[],
 ): Promise<{
   histories: Map<string, OfficialDailySharePoint[]>
-  gaps: Map<string, { sseFailedDates?: string[]; szseFailedRanges?: string[] }>
+  gaps: Map<string, { sseFailedDates?: string[]; sseEmptyDates?: string[]; szseFailedRanges?: string[]; szseEmptyDates?: string[] }>
 }> {
   const histories = new Map<string, OfficialDailySharePoint[]>()
-  const gaps = new Map<string, { sseFailedDates?: string[]; szseFailedRanges?: string[] }>()
+  const gaps = new Map<string, { sseFailedDates?: string[]; sseEmptyDates?: string[]; szseFailedRanges?: string[]; szseEmptyDates?: string[] }>()
   const fetchDatesByCode = new Map<string, string[]>()
 
   // 最近汇金披露日（取所有 ETF 末尾披露日的最大值）
@@ -144,12 +144,22 @@ async function fetchOfficialShareHistories(
     )
   }
 
-  // 合并上次缺口日期（优先补抓）
+  // 合并上次缺口日期（优先补抓）：HTTP 失败日与“200 但当日空”的日期都要重试
   for (const { quote } of picks) {
     const prevGaps = previous?.etfs.find((e) => e.code === quote.code)?.source.shareFetchGaps
-    if (prevGaps?.sseFailedDates?.length && quote.market === 'SH') {
+    if (quote.market === 'SH') {
+      const retryDates = [
+        ...(prevGaps?.sseFailedDates ?? []),
+        ...(prevGaps?.sseEmptyDates ?? []),
+      ]
+      if (retryDates.length) {
+        const dates = fetchDatesByCode.get(quote.code) ?? []
+        const merged = [...new Set([...retryDates, ...dates])].sort()
+        fetchDatesByCode.set(quote.code, merged)
+      }
+    } else if (quote.market === 'SZ' && prevGaps?.szseEmptyDates?.length) {
       const dates = fetchDatesByCode.get(quote.code) ?? []
-      const merged = [...new Set([...prevGaps.sseFailedDates, ...dates])].sort()
+      const merged = [...new Set([...prevGaps.szseEmptyDates, ...dates])].sort()
       fetchDatesByCode.set(quote.code, merged)
     }
   }
@@ -162,18 +172,23 @@ async function fetchOfficialShareHistories(
     ...new Set(shCodes.flatMap((code) => fetchDatesByCode.get(code) ?? [])),
   ].sort()
   if (shCodes.length && shDates.length) {
-    const { points: fetched, failedDates } = await fetchSseDailyShares(shCodes, shDates)
+    const { points: fetched, failedDates, emptyDates } = await fetchSseDailyShares(shCodes, shDates)
     for (const code of shCodes) {
       histories.set(
         code,
         mergeOfficialPoints(histories.get(code) ?? [], fetched.get(code) ?? []),
       )
     }
-    if (failedDates.length) {
+    if (failedDates.length || emptyDates.length) {
       for (const code of shCodes)
-        gaps.set(code, { sseFailedDates: failedDates })
+        gaps.set(code, {
+          ...(failedDates.length ? { sseFailedDates: failedDates } : {}),
+          ...(emptyDates.length ? { sseEmptyDates: emptyDates } : {}),
+        })
     }
-    console.log(`上交所 ETF 日份额：${shCodes.length} 只，查询 ${shDates.length} 个交易日，失败 ${failedDates.length} 日`)
+    console.log(
+      `上交所 ETF 日份额：${shCodes.length} 只，查询 ${shDates.length} 个交易日，失败 ${failedDates.length} 日，未发布 ${emptyDates.length} 日`,
+    )
   }
 
   const szQuotes = picks
@@ -182,7 +197,7 @@ async function fetchOfficialShareHistories(
   for (const quote of szQuotes) {
     const dates = fetchDatesByCode.get(quote.code) ?? []
     if (!dates.length) continue
-    const { points: fetched, failedRanges } = await fetchSzseDailyShares(
+    const { points: fetched, failedRanges, fetchedDates } = await fetchSzseDailyShares(
       quote.code,
       dates[0]!,
       dates[dates.length - 1]!,
@@ -198,15 +213,23 @@ async function fetchOfficialShareHistories(
       for (const range of prevGaps.szseFailedRanges) {
         const [start, end] = range.split('..').map((s) => s?.replace(/ p\d+$/, ''))
         if (start && end) {
-          const { points: gapPoints } = await fetchSzseDailyShares(quote.code, start, end)
+          const { points: gapPoints, fetchedDates: gapFetched } =
+            await fetchSzseDailyShares(quote.code, start, end)
           histories.set(quote.code, mergeOfficialPoints(histories.get(quote.code) ?? [], gapPoints))
+          for (const d of gapFetched) fetchedDates.add(d)
         }
       }
     }
 
-    if (failedRanges.length)
-      gaps.set(quote.code, { szseFailedRanges: failedRanges })
-    console.log(`深交所 ETF 日份额：${quote.code} 共 ${histories.get(quote.code)?.length ?? 0} 条，失败 ${failedRanges.length} 段`)
+    // 请求了但未返回的交易日 = 份额尚未发布（与 HTTP 失败的 failedRanges 区分）
+    const szseEmptyDates = dates.filter((d) => !fetchedDates.has(d))
+    const gap: { szseFailedRanges?: string[]; szseEmptyDates?: string[] } = {}
+    if (failedRanges.length) gap.szseFailedRanges = failedRanges
+    if (szseEmptyDates.length) gap.szseEmptyDates = szseEmptyDates
+    if (Object.keys(gap).length) gaps.set(quote.code, gap)
+    console.log(
+      `深交所 ETF 日份额：${quote.code} 共 ${histories.get(quote.code)?.length ?? 0} 条，失败 ${failedRanges.length} 段，未发布 ${szseEmptyDates.length} 日`,
+    )
   }
 
   return { histories, gaps }
@@ -217,7 +240,7 @@ async function buildEtfSnapshot(
   quote: EtfQuote,
   officialDailyShares: OfficialDailySharePoint[],
   previous?: EtfSnapshot,
-  shareFetchGaps?: { sseFailedDates?: string[]; szseFailedRanges?: string[] },
+  shareFetchGaps?: { sseFailedDates?: string[]; sseEmptyDates?: string[]; szseFailedRanges?: string[]; szseEmptyDates?: string[] },
   turnoverHistoryMerged?: TurnoverPoint[],
 ): Promise<EtfSnapshot> {
   const code = quote.code
