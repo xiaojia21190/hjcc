@@ -42,15 +42,23 @@ import {
 } from './sources/eastmoney'
 import { sleep } from './sources/http'
 import { mergeTurnoverHistory } from './lib/turnover'
-import { fetchTdxTurnoverBackfill } from './sources/tdx'
 import { fetchSectorTrend } from './sources/sector'
 import { fetchMarginHistory } from './sources/margin'
 import { fetchAllHolderReports } from './sources/sina'
 import { fetchSseDailyShares, type OfficialDailySharePoint } from './sources/sse'
 import { fetchSzseDailyShares } from './sources/szse'
 import { fetchLatestMarketActiveCapHistory } from './sources/market-latest'
-import { fetchTdxMarketActiveCapHistory } from './sources/tdx'
+
 import { fetchTushareMarketSeries } from './sources/tushare'
+
+// tdx 为可选降级源：node-tdx-market 未安装时静态 import 会拋 MODULE_NOT_FOUND，
+// 导致整个 fetch 脚本启动即崩。改用条件动态加载，缺包时降级东财，不阻断主流程。
+let tdxModule: typeof import('./sources/tdx') | null = null
+try {
+  tdxModule = await import('./sources/tdx')
+} catch {
+  console.log('tdx 模块不可用（node-tdx-market 未安装），0AMV 与换手率回填将降级东财')
+}
 
 const ROOT = join(import.meta.dir, '..')
 const DATA_DIR = join(ROOT, 'data')
@@ -300,10 +308,12 @@ async function buildEtfSnapshot(
   // 优先级：tdx 回填覆盖旧积累与当日快照（统一 tdx 口径，避免新旧换手率口径混用）；
   // mergeTurnoverHistory 后者覆盖前者。tdx 不可达时 tdxBackfill 为空，
   // 退化为原 turnoverHistoryMerged，与改动前行为一致。
-  const tdxBackfill = await fetchTdxTurnoverBackfill(
-    code,
-    scaleHistory.map((p) => ({ date: p.date, totalSharesYi: p.totalSharesYi })),
-  )
+  const tdxBackfill = tdxModule
+    ? await tdxModule.fetchTdxTurnoverBackfill(
+        code,
+        scaleHistory.map((p) => ({ date: p.date, totalSharesYi: p.totalSharesYi })),
+      )
+    : []
   const turnoverHistory = mergeTurnoverHistory(
     turnoverHistoryMerged ?? [],
     tdxBackfill,
@@ -357,24 +367,26 @@ export async function resolveMarketActiveCapHistory(
 
   // 通达信(tdx) 主源：直连行情服务器，不受东财 HTTP 路径封禁影响，
   // 翻页可拉到 2013 年（~2800 点），且成交额与东财缓存 99.96% 匹配。
-  // 连不上（CI 环境 / 公网受限）时静默降级东财，不记入 warnings。
-  try {
-    const history = await fetchTdxMarketActiveCapHistory()
-    if (history.length === 0) {
-      throw new Error('tdx 返回空的 0AMV 序列')
+  // 连不上（CI 环境 / 公网受限）或 node-tdx-market 未安装时静默降级东财，不记入 warnings。
+  if (tdxModule) {
+    try {
+      const history = await tdxModule.fetchTdxMarketActiveCapHistory()
+      if (history.length === 0) {
+        throw new Error('tdx 返回空的 0AMV 序列')
+      }
+      return {
+        history,
+        quality: {
+          source: 'tdx',
+          asOf: history.at(-1)?.date ?? null,
+          isPartial: false,
+          warning: null,
+        },
+      }
+    } catch (error) {
+      // tdx 不可达（CI / 网络受限）属预期，降级东财而非告警
+      console.log('tdx 0AMV 主源不可用，降级东财历史日线:', error instanceof Error ? error.message : error)
     }
-    return {
-      history,
-      quality: {
-        source: 'tdx',
-        asOf: history.at(-1)?.date ?? null,
-        isPartial: false,
-        warning: null,
-      },
-    }
-  } catch (error) {
-    // tdx 不可达（CI / 网络受限）属预期，降级东财而非告警
-    console.log('tdx 0AMV 主源不可用，降级东财历史日线:', error instanceof Error ? error.message : error)
   }
 
   try {
