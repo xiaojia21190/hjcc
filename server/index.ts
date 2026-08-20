@@ -10,35 +10,72 @@ const ROOT = join(import.meta.dir, '..')
 const DATA_FILE = join(ROOT, 'data', 'dashboard.json')
 const PUBLIC_FILE = join(ROOT, 'public', 'dashboard.json')
 const PORT = Number(process.env.PORT || 8787)
-const REFERENCE_DURATION_MS = 90_000
+// 实测一轮全量抓取 160–300s，板块补抓失败时逼近 5 分钟；这里给进度条一个接近真实耗时的参考。
+const REFERENCE_DURATION_MS = 240_000
 
 type FetchStatus = {
   state: 'fetching' | 'idle'
   startedAt: string | null
   updatedAt: string | null
+  /** 当前 dashboard.json 的 updatedAt；fetch 成功后更新，供前端区分“跑完但没变”与“仍在跑” */
+  dataUpdatedAt?: string | null
+  /** 最近一次 fetch 的结果；null 表示从未跑过或正在首次运行 */
+  lastRun?: {
+    exitCode: number | null
+    startedAt: string
+    finishedAt: string
+    durationMs: number
+    dataUpdatedAt: string | null
+  } | null
 }
 
 let fetchStatus: FetchStatus = {
   state: 'idle',
   startedAt: null,
   updatedAt: null,
+  lastRun: null,
 }
 
 function isFetching() {
   return fetchStatus.state === 'fetching'
 }
 
+let currentRunStartedAt: string | null = null
+let currentRunStartedMs: number | null = null
+let preRunDataUpdatedAt: string | null = null
+
 function markFetching() {
   const now = new Date().toISOString()
-  fetchStatus = { state: 'fetching', startedAt: now, updatedAt: now }
+  currentRunStartedAt = now
+  currentRunStartedMs = Date.now()
+  preRunDataUpdatedAt = fetchStatus.dataUpdatedAt ?? null
+  fetchStatus = { ...fetchStatus, state: 'fetching', startedAt: now, updatedAt: now }
 }
 
-function markIdle() {
+function markIdle(exitCode: number | null) {
+  const finishedAt = new Date().toISOString()
+  const durationMs =
+    currentRunStartedMs != null ? Date.now() - currentRunStartedMs : null
+  const lastRun =
+    currentRunStartedAt != null && durationMs != null
+      ? {
+          exitCode,
+          startedAt: currentRunStartedAt,
+          finishedAt,
+          durationMs,
+          dataUpdatedAt: fetchStatus.dataUpdatedAt ?? null,
+        }
+      : null
   fetchStatus = {
     state: 'idle',
     startedAt: null,
-    updatedAt: new Date().toISOString(),
+    updatedAt: finishedAt,
+    dataUpdatedAt: fetchStatus.dataUpdatedAt ?? null,
+    lastRun,
   }
+  currentRunStartedAt = null
+  currentRunStartedMs = null
+  preRunDataUpdatedAt = null
 }
 
 async function loadDashboard(): Promise<unknown> {
@@ -130,21 +167,24 @@ Bun.serve({
       // 异步抓取
       runFetch()
         .then(async (code) => {
-          markIdle()
+          // 抓取成功后读取新快照的 updatedAt，供前端区分“跑完了但数据没变”与“仍在跑”
           if (code === 0) {
-            // 同步到 public
             try {
-              await mkdir(join(ROOT, 'public'), { recursive: true })
               const raw = await readFile(DATA_FILE, 'utf-8')
+              const parsed = JSON.parse(raw) as { updatedAt?: string }
+              fetchStatus.dataUpdatedAt = parsed.updatedAt ?? null
+              // 同步到 public
+              await mkdir(join(ROOT, 'public'), { recursive: true })
               await writeFile(PUBLIC_FILE, raw, 'utf-8')
             } catch {
               /* ignore */
             }
           }
+          markIdle(code)
           console.log('refresh finished', code)
         })
         .catch((e) => {
-          markIdle()
+          markIdle(1)
           console.error(e)
         })
       return Response.json(

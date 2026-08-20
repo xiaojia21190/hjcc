@@ -4,14 +4,23 @@ export const supportsServerRefresh =
   import.meta.env.VITE_STATIC_DEPLOY !== 'true'
 
 /** 前端等待上限，与后端 referenceDurationMs 解耦。 */
-export const MAX_WAIT_MS = 150_000
-export const DEFAULT_REFERENCE_DURATION_MS = 90_000
+// 实测一轮全量抓取 160–300s，板块补抓失败时逼近 5 分钟；预留余量到 7 分钟。
+export const MAX_WAIT_MS = 420_000
+export const DEFAULT_REFERENCE_DURATION_MS = 240_000
 
 export type RefreshStatus = {
   state: 'fetching' | 'idle'
   startedAt: string | null
   updatedAt: string | null
   referenceDurationMs: number
+  /** 最近一次 fetch 的结果；null 表示从未跑过或正在首次运行 */
+  lastRun?: {
+    exitCode: number | null
+    startedAt: string
+    finishedAt: string
+    durationMs: number
+    dataUpdatedAt: string | null
+  } | null
 }
 
 export async function loadDashboard(): Promise<DashboardData> {

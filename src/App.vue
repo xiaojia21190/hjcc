@@ -119,7 +119,8 @@ async function onRefresh() {
       applyDashboard(result.dashboard)
       showToast('ok', `已更新至 ${formatDateTime(result.dashboard.updatedAt)}`)
     } else if (result.kind === 'timeout') {
-      showToast('error', '后台抓取超时，数据可能仍在生成，可稍后点击“重新加载”')
+      // 后台 fetch 常需 3–5 分钟，超过前端等待上限不等于失败；下次重新加载即可看到新数据
+      showToast('error', '后台抓取仍在进行（全量需 3–5 分钟），请稍后点“重新加载”')
     } else {
       showToast('error', '抓取可能失败，详见服务器日志')
     }
