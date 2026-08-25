@@ -12,6 +12,8 @@ import type {
   MarketActiveCapPoint,
   MarketActiveCapQuality,
   TurnoverPoint,
+  CiticPositionPoint,
+  CiticPositionQuality,
 } from '../shared/types'
 import {
   computeOfficialFetchDates,
@@ -44,6 +46,7 @@ import { sleep } from './sources/http'
 import { mergeTurnoverHistory } from './lib/turnover'
 import { fetchSectorTrend } from './sources/sector'
 import { fetchMarginHistory } from './sources/margin'
+import { fetchCiticPositionHistory, fetchCiticPositionHistoryCffex, unavailableCiticQuality } from './sources/citic'
 import { fetchAllHolderReports } from './sources/sina'
 import { fetchSseDailyShares, type OfficialDailySharePoint } from './sources/sse'
 import { fetchSzseDailyShares } from './sources/szse'
@@ -495,6 +498,33 @@ async function main() {
     console.warn('两融抓取失败，沿用上次快照', error)
   }
 
+  let citicPositionHistory: CiticPositionPoint[] = previous?.citicPositionHistory ?? []
+  let citicPositionQuality: CiticPositionQuality =
+    previous?.citicPositionQuality ?? unavailableCiticQuality('未接入中信持仓数据源')
+  const tushareToken = process.env.TUSHARE_TOKEN?.trim()
+  const useTushare = tushareToken != null
+  console.log(useTushare ? '抓取中信期货股指期货会员多空持仓（Tushare）…' : '抓取中信期货股指期货会员多空持仓（中金所官网/Python）…')
+  try {
+    const fetched = useTushare
+      ? await fetchCiticPositionHistory(tushareToken!)
+      : fetchCiticPositionHistoryCffex()
+    citicPositionHistory = fetched
+    citicPositionQuality = {
+      source: useTushare ? 'tushare' : 'cffex',
+      asOf: fetched.at(-1)?.date ?? null,
+      warning: null,
+    }
+    console.log(`中信会员持仓 ${fetched.length} 条，截止 ${citicPositionQuality.asOf}`)
+  } catch (error) {
+    const warning = error instanceof Error ? error.message : String(error)
+    citicPositionQuality = {
+      source: citicPositionHistory.length > 0 ? 'cache' : 'unavailable',
+      asOf: citicPositionHistory.at(-1)?.date ?? null,
+      warning: `本次抓取失败：${warning}`,
+    }
+    console.warn('中信会员持仓抓取失败，沿用上次快照', error)
+  }
+
   // 板块日线要打数十个 push2his 请求，与 0AMV 同域名。必须等 0AMV 完成后再串行
   // 发起，否则叠加的请求量会触发东财域名级限流，把 0AMV 一起拖失败。
   console.log('抓取行业板块日线…')
@@ -591,6 +621,8 @@ async function main() {
       '指南针 0AMV（活筹指数）公开近似公式：SMA(沪深两市成交额,10,1) × 中证全指收盘 / 前5日中证全指均值；价格代理来自东方财富中证全指 000985，成交额为上证综指 000001 与深证成指 399001 日成交额之和。指南针原版算法未公开，本序列用于观察方向和趋势，不等同于 ETF 份额、基金净资产或官方 0AMV 绝对值。',
     marketActiveCapQuality: marketActiveCapResolution.quality,
     marginHistory,
+    citicPositionHistory,
+    citicPositionQuality,
     sectorTrend,
     summary: {
       totalHuijinMarketValue: totalMv,

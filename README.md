@@ -35,9 +35,12 @@ Vue 3 + Vite + Bun + ECharts 看板：按类别自动选取**市值最大**的�
 | 行业板块日线 | 东方财富板块 `push2his` kline（申万二级，BK04-BK10 段） |
 | 0AMV 价格代理 | 东方财富中证全指 `000985` 日线；主源为通达信(tdx)扩展行情（`node-tdx-market` 直连 market=62），见 [`docs/tdx-integration.md`](docs/tdx-integration.md) |
 | 0AMV 成交额输入 | 东方财富上证综指 `000001` + 深证成指 `399001` 日成交额；主源为通达信(tdx)主行情（`node-tdx-market` 直连），东财为备用 |
+| 中信期货会员股指期货多空持仓 | 中金所官网每日会员持仓排名（`cffex.com.cn`，IF/IH/IC/IM 全部合约中信系会员合计），经 akshare 抓取，无需 Tushare 授权；设置 `TUSHARE_TOKEN` 时改用 Tushare `fut_holding` |
 
 东财 0AMV 日线不可用时，可显式启用 Tushare 备用源：设置 `TUSHARE_TOKEN` 与 `TUSHARE_FALLBACK=1`。
 Tushare `index_daily` 需要分别请求三只指数，且免费额度可能限制为每小时一次，因此默认不自动启用；额度不足时程序会继续使用最新快照或上次有效数据，不会用成交量冒充成交额。
+
+中信期货会员股指期货多空持仓默认抓**中金所官网**（无需任何 token）。这条链路依赖本机 **Python + `akshare`**（`pip install akshare`）：抓取脚本会调用 `python scripts/sources/cffex_citic.py`。若本机 `python` 不在 Bun 的 PATH 解析范围，可设 `CITIC_PYTHON` 指向解释器完整路径。未装 Python/akshare 时该数据源会优雅降级（面板显示“未接入数据源”），不影响其它模块。设置 `TUSHARE_TOKEN` 时改为 Tushare `fut_holding`（需约 2000 积分）。
 
 东方财富历史日线接口不可用时，抓取脚本会改用同源 `stock/get` 最新指数快照，
 在已有 0AMV 历史末尾补算最新交易日，避免日线接口的路径级封禁让序列永久停滞。快照会记录实际来源、截止日期与是否为临时快照；历史接口返回空序列时也会继续进入备用链。

@@ -167,6 +167,33 @@ export interface MarginPoint {
   rzyezb: number | null
 }
 
+/** 中信期货会员在股指期货品种上的日终持仓汇总。 */
+export interface CiticPositionPoint {
+  date: string
+  /** 股指期货品种：IF / IH / IC / IM */
+  product: 'IF' | 'IH' | 'IC' | 'IM'
+  /** 多头持仓手数 */
+  longHold: number
+  /** 空头持仓手数 */
+  shortHold: number
+  /** 净持仓手数 = 多头 - 空头 */
+  netHold: number
+  /** 相对上次交易日的多头增减 */
+  longChange: number | null
+  /** 相对上次交易日的空头增减 */
+  shortChange: number | null
+  /** 相对上次交易日的净持仓增减 */
+  netChange: number | null
+}
+
+export type CiticPositionDataSource = 'tushare' | 'cffex' | 'cache' | 'unavailable'
+
+export interface CiticPositionQuality {
+  source: CiticPositionDataSource
+  asOf: string | null
+  warning: string | null
+}
+
 /** 持有人报告期事件；不是公告发布日期。 */
 export interface MarketReportEvent {
   date: string
@@ -241,6 +268,10 @@ export interface DashboardData {
   marketActiveCapHistory: MarketActiveCapPoint[]
   /** 沪深两融市场合计历史；抓取失败时沿用上次快照 */
   marginHistory?: MarginPoint[]
+  /** 中信期货会员股指期货多空持仓历史；无授权数据源时为空。 */
+  citicPositionHistory?: CiticPositionPoint[]
+  /** 中信期货会员持仓本次抓取的来源和完整性状态。 */
+  citicPositionQuality?: CiticPositionQuality
   /** 0AMV 的定义、计算口径和数据来源说明。 */
   marketActiveCapSource: string
   /** 0AMV 本次抓取实际使用的来源和截止日期；旧快照可能没有此字段。 */

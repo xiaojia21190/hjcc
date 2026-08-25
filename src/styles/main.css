@@ -1398,3 +1398,45 @@ tr:focus-visible {
 .retail-grid .force-verdict-gate[data-hot='去杠杆'] .insight-value {
   color: var(--accent-2);
 }
+
+/* 中信席位多空面板：三格布局与方向着色 */
+.citic-grid {
+  grid-template-columns: 1.2fr repeat(2, minmax(0, 1fr));
+}
+
+.citic-grid .force-verdict-primary[data-tone='up'] .insight-value,
+.citic-grid .force-verdict-gate[data-status='up'] .insight-value {
+  color: var(--up);
+}
+
+.citic-grid .force-verdict-primary[data-tone='down'] .insight-value,
+.citic-grid .force-verdict-gate[data-status='down'] .insight-value {
+  color: var(--accent-2);
+}
+
+.citic-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  margin: 4px 0 10px;
+}
+
+.citic-table th,
+.citic-table td {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--line);
+  text-align: right;
+}
+
+.citic-table th:first-child,
+.citic-table td:first-child {
+  text-align: left;
+}
+
+.citic-table td[data-direction='净多'] {
+  color: var(--up);
+}
+
+.citic-table td[data-direction='净空'] {
+  color: var(--accent-2);
+}

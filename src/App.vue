@@ -20,6 +20,7 @@ import DataQualityBar from './components/DataQualityBar.vue'
 import ForceBriefingPanel from './components/ForceBriefingPanel.vue'
 import ForceVerdictPanel from './components/ForceVerdictPanel.vue'
 import RetailPanel from './components/RetailPanel.vue'
+import CiticPanel from './components/CiticPanel.vue'
 import { downloadEtfCsv, downloadMarketCsv } from './utils/dashboardExport'
 import { formatDateTime } from './utils/format'
 import { waitForRefresh } from './utils/refreshWait'
@@ -226,6 +227,12 @@ onBeforeUnmount(() => {
           :etfs="etfs"
           :margin-history="data.marginHistory ?? []"
           :market-history="data.marketActiveCapHistory ?? []"
+        />
+
+        <CiticPanel
+          v-if="data"
+          :history="data.citicPositionHistory ?? []"
+          :quality="data.citicPositionQuality ?? null"
         />
 
         <section class="card panel">
