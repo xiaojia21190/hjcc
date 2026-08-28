@@ -23,13 +23,19 @@ const AXIS = {
 const NAME_STYLE = { color: '#6b7c90', fontSize: 11 }
 
 function categoryAxis(dates: string[], gridIndex?: number) {
+  const showFull = dates.length <= 48 || dates.some((value) => value.includes('-W'))
   return {
     type: 'category' as const,
     data: dates,
     boundaryGap: true,
     ...AXIS,
     ...(gridIndex == null
-      ? { axisLabel: { ...AXIS.axisLabel, formatter: (value: string) => value.slice(0, 7) } }
+      ? {
+          axisLabel: {
+            ...AXIS.axisLabel,
+            formatter: (value: string) => (showFull ? value : value.slice(0, 7)),
+          },
+        }
       : { gridIndex, axisLabel: { show: false }, axisTick: { show: false } }),
   }
 }
@@ -173,11 +179,13 @@ export function buildActiveCapChartOption(
   events: MarketReportEvent[],
   macdPoints: MacdPoint[],
   kdjPoints: KdjPoint[],
+  timeframe: 'daily' | 'weekly' | 'monthly' = 'daily',
 ): EChartsCoreOption {
   const dates = history.map((point) => point.date)
-  const visibleStart = Math.max(0, dates.length - 250)
+  const visibleCount = timeframe === 'daily' ? 250 : dates.length
+  const visibleStart = Math.max(0, dates.length - visibleCount)
   const visibleEnd = Math.max(visibleStart, dates.length - 1)
-  const dateSet = new Set(dates)
+  const dateSet = new Set(dates.map((date) => date.split('（')[0]))
   const visibleEvents = events.filter((event) => dateSet.has(event.date))
   const zoom = { startValue: visibleStart, endValue: visibleEnd }
 
