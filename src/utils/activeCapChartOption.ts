@@ -1,5 +1,5 @@
 import type { EChartsCoreOption } from 'echarts/core'
-import type { MarketActiveCapPoint, MarketReportEvent } from '../../shared/types'
+import type { CiticPositionPoint, MarketActiveCapPoint, MarketReportEvent } from '../../shared/types'
 import { formatActiveCapTooltip, MAIN_LEGEND } from './activeCapTooltip'
 import type { KdjPoint } from './kdj'
 import type { MacdPoint } from './macd'
@@ -61,7 +61,65 @@ function eventMarkLine(events: MarketReportEvent[]) {
   }
 }
 
-function priceSeries(history: MarketActiveCapPoint[], events: MarketReportEvent[]) {
+/** 中信期货净持仓 |netChange| 超过 2σ 的交易日，作为事件标记。 */
+function citicEventDates(citicHistory: CiticPositionPoint[]): Map<string, string[]> {
+  const byDate = new Map<string, CiticPositionPoint[]>()
+  for (const point of citicHistory) {
+    if (point.netChange == null) continue
+    const list = byDate.get(point.date) ?? []
+    list.push(point)
+    byDate.set(point.date, list)
+  }
+  // 全样本 netChange 的 σ
+  const all = citicHistory
+    .map((point) => point.netChange)
+    .filter((v): v is number => v != null)
+  if (all.length < 20) return new Map()
+  const mean = all.reduce((s, v) => s + v, 0) / all.length
+  const variance = all.reduce((s, v) => s + (v - mean) ** 2, 0) / (all.length - 1)
+  const sigma = Math.sqrt(variance)
+  if (sigma === 0) return new Map()
+  const threshold = 2 * sigma
+  const events = new Map<string, string[]>()
+  for (const [date, points] of byDate) {
+    const maxAbs = points
+      .map((p) => Math.abs(p.netChange!))
+      .reduce((a, b) => (b > a ? b : a), 0)
+    if (maxAbs >= threshold) {
+      const sign = points.reduce((s, p) => s + (p.netChange ?? 0), 0) >= 0 ? '中信净增' : '中信净减'
+      events.set(date, [`${sign} ${maxAbs.toLocaleString()} 手`])
+    }
+  }
+  return events
+}
+
+function citicMarkLine(citicHistory: CiticPositionPoint[], dateSet: Set<string>) {
+  const events = citicEventDates(citicHistory)
+  const items: { name: string; xAxis: string }[] = []
+  for (const [date, labels] of events) {
+    if (!dateSet.has(date)) continue
+    items.push({ name: labels.join(' / '), xAxis: date })
+  }
+  if (items.length === 0) return undefined
+  return {
+    symbol: ['none', 'none'],
+    silent: false,
+    lineStyle: { color: 'rgba(248,113,113,0.55)', type: 'dotted', width: 1 },
+    label: {
+      show: true,
+      color: '#f87171',
+      fontSize: 10,
+      formatter: '{b}',
+      position: 'insideEndBottom',
+    },
+    data: items,
+  }
+}
+
+function priceSeries(
+  history: MarketActiveCapPoint[],
+  events: MarketReportEvent[],
+) {
   return [
     {
       name: '0AMV 活筹估算',
@@ -74,6 +132,16 @@ function priceSeries(history: MarketActiveCapPoint[], events: MarketReportEvent[
       areaStyle: { color: 'rgba(61,156,240,0.10)' },
       markLine: eventMarkLine(events),
       z: 3,
+    },
+    // 中信大额增减持事件标记：用隐形线序列承载 markLine，避免主序列 markLine 冲突
+    {
+      name: '中信大额事件',
+      type: 'line',
+      showSymbol: false,
+      data: [],
+      lineStyle: { opacity: 0, width: 0 },
+      markLine: undefined, // 由调用方注入
+      z: 2,
     },
     {
       name: '5 日参考线',
@@ -180,6 +248,7 @@ export function buildActiveCapChartOption(
   macdPoints: MacdPoint[],
   kdjPoints: KdjPoint[],
   timeframe: 'daily' | 'weekly' | 'monthly' = 'daily',
+  citicHistory: CiticPositionPoint[] = [],
 ): EChartsCoreOption {
   const dates = history.map((point) => point.date)
   const visibleCount = timeframe === 'daily' ? 250 : dates.length
@@ -187,7 +256,15 @@ export function buildActiveCapChartOption(
   const visibleEnd = Math.max(visibleStart, dates.length - 1)
   const dateSet = new Set(dates.map((date) => date.split('（')[0]))
   const visibleEvents = events.filter((event) => dateSet.has(event.date))
+  const citicMarkLineOption =
+    citicHistory.length > 0 ? citicMarkLine(citicHistory, dateSet) : undefined
   const zoom = { startValue: visibleStart, endValue: visibleEnd }
+  const series: Record<string, unknown>[] = [...priceSeries(history, visibleEvents)]
+  if (citicMarkLineOption) {
+    // 在隐形事件序列上注入 markLine
+    const eventSeries = series.find((s) => s.name === '中信大额事件')
+    if (eventSeries) eventSeries.markLine = citicMarkLineOption
+  }
 
   return {
     backgroundColor: 'transparent',
@@ -240,7 +317,7 @@ export function buildActiveCapChartOption(
       }),
     ],
     series: [
-      ...priceSeries(history, visibleEvents),
+      ...series,
       ...macdSeries(macdPoints),
       ...kdjSeries(kdjPoints),
     ],

@@ -14,6 +14,10 @@ export interface CiticProductSignal {
   netRatioPct: number
   netChange5d: number | null
   direction: '净多' | '净空' | '中性'
+  /** 空头前五持仓占全市场空头总持仓 %；未接入时 null */
+  shortTop5Pct: number | null
+  /** 多头前五持仓占全市场多头总持仓 %；未接入时 null */
+  longTop5Pct: number | null
 }
 
 export interface CiticVerdict {
@@ -23,6 +27,8 @@ export interface CiticVerdict {
   productCount: number
   medianNetRatioPct: number | null
   medianNetChange5d: number | null
+  /** 四品种空头前五集中度中位数 %；null 表示数据源未提供 */
+  medianShortTop5Pct: number | null
   rows: CiticProductSignal[]
   detail: string
   cautions: string[]
@@ -72,6 +78,8 @@ export function judgeCiticPositions(history: CiticPositionPoint[]): CiticVerdict
         netHold: point.netHold,
         netRatioPct,
         netChange5d: fiveDayChange(history, point),
+        shortTop5Pct: point.shortTop5Pct ?? null,
+        longTop5Pct: point.longTop5Pct ?? null,
         direction:
           netRatioPct >= NET_RATIO_THRESHOLD
             ? '净多'
@@ -88,6 +96,7 @@ export function judgeCiticPositions(history: CiticPositionPoint[]): CiticVerdict
       productCount: 0,
       medianNetRatioPct: null,
       medianNetChange5d: null,
+      medianShortTop5Pct: null,
       rows: [],
       detail: '未接入中信期货会员持仓数据',
       cautions: [],
@@ -99,6 +108,12 @@ export function judgeCiticPositions(history: CiticPositionPoint[]): CiticVerdict
     .map((row) => row.netChange5d)
     .filter((value): value is number => value != null)
   const medianNetChange5d = median(changes)
+  const shortTop5 = rows
+    .map((row) => row.shortTop5Pct)
+    .filter((value): value is number => value != null)
+  const medianShortTop5Pct = median(shortTop5)
+  const cautions: string[] = []
+  if (shortTop5.length === 0) cautions.push('数据源未提供多头/空头前五集中度')
   const status =
     medianNetRatioPct != null && medianNetRatioPct >= NET_RATIO_THRESHOLD
       ? '净多倾向'
@@ -107,7 +122,6 @@ export function judgeCiticPositions(history: CiticPositionPoint[]): CiticVerdict
         : '中性/混合'
   const tone = status === '净多倾向' ? 'up' : status === '净空倾向' ? 'down' : 'neutral'
   const date = rows.map((row) => row.date).sort().at(-1) ?? null
-  const cautions: string[] = []
   if (rows.length < PRODUCTS.length) cautions.push(`仅覆盖 ${rows.length}/${PRODUCTS.length} 个品种`)
   if (new Set(rows.map((row) => row.date)).size > 1) cautions.push('品种最新日期不一致')
   if (changes.length < rows.length) cautions.push('部分品种不足 6 个交易日，暂无 5 日变化')
@@ -119,6 +133,7 @@ export function judgeCiticPositions(history: CiticPositionPoint[]): CiticVerdict
     productCount: rows.length,
     medianNetRatioPct,
     medianNetChange5d,
+    medianShortTop5Pct,
     rows,
     detail:
       medianNetChange5d == null

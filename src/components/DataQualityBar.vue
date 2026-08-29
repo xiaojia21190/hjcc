@@ -164,6 +164,45 @@ const items = computed(() => {
           ? 'partial'
           : 'ok') as QualityTone,
     },
+    {
+      label: '份额抓取缺口',
+      status: (() => {
+        const gaps = etfs
+          .map((etf) => etf.source.shareFetchGaps)
+          .filter((g): g is NonNullable<typeof g> => g != null)
+        if (gaps.length === 0) return '无'
+        const sseFailed = gaps.reduce((s, g) => s + (g.sseFailedDates?.length ?? 0), 0)
+        const szseFailed = gaps.reduce((s, g) => s + (g.szseFailedRanges?.length ?? 0), 0)
+        const sseEmpty = gaps.reduce((s, g) => s + (g.sseEmptyDates?.length ?? 0), 0)
+        const szseEmpty = gaps.reduce((s, g) => s + (g.szseEmptyDates?.length ?? 0), 0)
+        return sseFailed + szseFailed > 0 ? '有缺口' : sseEmpty + szseEmpty > 0 ? '待发布' : '无'
+      })(),
+      detail: (() => {
+        const gaps = etfs
+          .map((etf) => etf.source.shareFetchGaps)
+          .filter((g): g is NonNullable<typeof g> => g != null)
+        if (gaps.length === 0) return '交易所份额接口无抓取失败'
+        const sseFailed = gaps.reduce((s, g) => s + (g.sseFailedDates?.length ?? 0), 0)
+        const szseFailed = gaps.reduce((s, g) => s + (g.szseFailedRanges?.length ?? 0), 0)
+        const sseEmpty = gaps.reduce((s, g) => s + (g.sseEmptyDates?.length ?? 0), 0)
+        const szseEmpty = gaps.reduce((s, g) => s + (g.szseEmptyDates?.length ?? 0), 0)
+        const parts: string[] = []
+        if (sseFailed > 0) parts.push(`上证失败 ${sseFailed} 日`)
+        if (szseFailed > 0) parts.push(`深证失败 ${szseFailed} 区间`)
+        if (sseEmpty > 0) parts.push(`上证未发布 ${sseEmpty} 日`)
+        if (szseEmpty > 0) parts.push(`深证未发布 ${szseEmpty} 日`)
+        return parts.join(' · ') || '无缺口'
+      })(),
+      tone: (() => {
+        const gaps = etfs
+          .map((etf) => etf.source.shareFetchGaps)
+          .filter((g): g is NonNullable<typeof g> => g != null)
+        if (gaps.length === 0) return 'ok' as QualityTone
+        const sseFailed = gaps.reduce((s, g) => s + (g.sseFailedDates?.length ?? 0), 0)
+        const szseFailed = gaps.reduce((s, g) => s + (g.szseFailedRanges?.length ?? 0), 0)
+        return sseFailed + szseFailed > 0 ? ('warn' as QualityTone) : ('partial' as QualityTone)
+      })(),
+    },
   ]
 })
 </script>

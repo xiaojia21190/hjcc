@@ -1,19 +1,21 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import type { MarketActiveCapPoint, MarketReportEvent } from '../../shared/types'
+import type { CiticPositionPoint, MarketActiveCapPoint, MarketReportEvent } from '../../shared/types'
 import BaseChart from './BaseChart.vue'
 import { changeClass, formatPct, formatYi } from '../utils/format'
 import { computeMacd } from '../utils/macd'
 import { computeKdj, kdjSignal } from '../utils/kdj'
 import { buildActiveCapChartOption } from '../utils/activeCapChartOption'
 import { resampleActiveCap, type Timeframe } from '../utils/activeCapResample'
+import { activeCapPercentile } from '../utils/activeCapStats'
 
 const props = withDefaults(
   defineProps<{
     history?: MarketActiveCapPoint[]
     events?: MarketReportEvent[]
+    citicHistory?: CiticPositionPoint[]
   }>(),
-  { history: () => [], events: () => [] },
+  { history: () => [], events: () => [], citicHistory: () => [] },
 )
 
 const timeframe = ref<Timeframe>('daily')
@@ -52,6 +54,14 @@ function macdSignal(
 const values = computed(() => visible.value.map((point) => point.activeCapYi))
 const macd = computed(() => computeMacd(values.value))
 const kdj = computed(() => computeKdj(values.value))
+const percentile = computed(() => activeCapPercentile(props.history))
+
+function pctTone(pct: number | null): string {
+  if (pct == null) return ''
+  if (pct >= 80) return 'up'
+  if (pct <= 20) return 'down'
+  return ''
+}
 
 const marketStats = computed(() => {
   const latest = visible.value.at(-1)
@@ -64,6 +74,7 @@ const marketStats = computed(() => {
   const referenceGap = changePct(latest.activeCapYi, latest.referenceMaYi ?? undefined)
   const macdLatest = macd.value.at(-1)
   const kdjLatest = kdj.value.at(-1)
+  const pct = percentile.value
 
   return [
     {
@@ -109,11 +120,30 @@ const marketStats = computed(() => {
           : `J ${kdjLatest.j.toFixed(1)} · ${kdjSignal(kdjLatest, kdj.value.at(-2))}`,
       tone: kdjLatest == null ? '' : changeClass(kdjLatest.k - kdjLatest.d),
     },
+    {
+      label: '1 年分位',
+      value: pct?.oneYearPct == null ? '—' : `${pct.oneYearPct.toFixed(0)}%`,
+      sub: pct?.oneYearPct == null ? '历史不足' : pct.oneYearPct >= 80 ? '高位区' : pct.oneYearPct <= 20 ? '低位区' : '区间内',
+      tone: pctTone(pct?.oneYearPct ?? null),
+    },
+    {
+      label: '3 年分位',
+      value: pct?.threeYearPct == null ? '—' : `${pct.threeYearPct.toFixed(0)}%`,
+      sub: pct?.threeYearPct == null ? '历史不足' : pct.threeYearPct >= 80 ? '历史高位' : pct.threeYearPct <= 20 ? '历史低位' : '历史区间内',
+      tone: pctTone(pct?.threeYearPct ?? null),
+    },
   ]
 })
 
 const option = computed(() =>
-  buildActiveCapChartOption(visible.value, events.value, macd.value, kdj.value, timeframe.value),
+  buildActiveCapChartOption(
+    visible.value,
+    events.value,
+    macd.value,
+    kdj.value,
+    timeframe.value,
+    props.citicHistory,
+  ),
 )
 </script>
 
@@ -137,7 +167,7 @@ const option = computed(() =>
       </div>
     </div>
     <p v-if="events.length" class="chart-note">
-      金色虚线仅标记汇金持有人报告期；报告期不等同于公告发布日期。
+      金色虚线仅标记汇金持有人报告期；报告期不等同于公告发布日期。红色点线标记中信期货大额增减持（|Δ| ≥ 2σ）。
     </p>
     <p class="chart-note muted">
       KDJ 用 0AMV 自身滚动高低点近似 RSV，不是个股 OHLC 口径；虚线为 20 / 50 / 80。周/月线由日线聚合：活筹取周期末值，成交额取周期合计，指标按周期重算。

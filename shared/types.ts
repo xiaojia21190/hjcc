@@ -182,8 +182,12 @@ export interface CiticPositionPoint {
   longChange: number | null
   /** 相对上次交易日的空头增减 */
   shortChange: number | null
-  /** 相对上次交易日的净持仓增减 */
+  /** 中信系合计净持仓增减 */
   netChange: number | null
+  /** 空头前五会员合计持仓占该品种全市场空头总持仓 % */
+  shortTop5Pct?: number | null
+  /** 多头前五会员合计持仓占该品种全市场多头总持仓 % */
+  longTop5Pct?: number | null
 }
 
 export type CiticPositionDataSource = 'tushare' | 'cffex' | 'cache' | 'unavailable'

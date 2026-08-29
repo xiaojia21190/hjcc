@@ -8,7 +8,7 @@ const props = withDefaults(
   defineProps<{
     etf?: EtfSnapshot | null
     etfs?: EtfSnapshot[]
-    mode?: 'single' | 'all'
+    mode?: 'single' | 'all' | 'rate'
   }>(),
   { etf: null, etfs: () => [], mode: 'all' },
 )
@@ -70,6 +70,9 @@ const option = computed<EChartsCoreOption>(() => {
       ? dailyHistory.slice(-OFFICIAL_DISPLAY_POINTS)
       : props.etf.scaleHistory.slice(-24)
     const hasDaily = dailyHistory.length > 0
+    const navByDate = new Map(
+      props.etf.navHistory.map((point) => [point.date, point.nav]),
+    )
     const huijinMap = new Map(
       props.etf.huijinHistory.map((point) => [
         point.reportDate,
@@ -117,6 +120,20 @@ const option = computed<EChartsCoreOption>(() => {
           areaStyle: { color: 'rgba(61,156,240,0.10)' },
         },
         {
+          name: '单位净值',
+          type: 'line',
+          smooth: false,
+          showSymbol: false,
+          data: hist
+            .map((point) => {
+              const nav = navByDate.get(point.date)
+              return nav == null ? null : [point.date, nav]
+            })
+            .filter((v): v is [string, number] => v != null),
+          itemStyle: { color: palette[3] },
+          lineStyle: { width: 1.4, type: 'dashed' },
+        },
+        {
           name: '汇金披露份额',
           type: 'line',
           smooth: false,
@@ -142,6 +159,55 @@ const option = computed<EChartsCoreOption>(() => {
           itemStyle: { color: 'rgba(94,234,212,0.42)' },
         },
       ],
+    }
+  }
+
+  // 份额 5 日变化率叠加模式：跨 ETF 可比
+  if (props.mode === 'rate') {
+    const rateSeries = props.etfs.map((etf, index) => {
+      const daily = etf.scaleHistory.filter((point) => point.frequency === 'daily')
+      const points: [string, number][] = []
+      for (let i = 5; i < daily.length; i++) {
+        const base = daily[i - 5].totalSharesYi
+        const cur = daily[i].totalSharesYi
+        if (base <= 0) continue
+        points.push([daily[i].date, ((cur - base) / base) * 100])
+      }
+      return {
+        name: etf.categoryName,
+        type: 'line' as const,
+        showSymbol: false,
+        smooth: false,
+        data: points.slice(-OFFICIAL_DISPLAY_POINTS),
+        itemStyle: { color: palette[index % palette.length] },
+        lineStyle: { width: 1.6 },
+      }
+    })
+    return {
+      backgroundColor: 'transparent',
+      color: palette,
+      tooltip: {
+        trigger: 'axis',
+        axisPointer: { type: 'line' },
+        backgroundColor: 'rgba(18,24,32,0.96)',
+        borderColor: 'rgba(148,163,184,0.2)',
+        textStyle: { color: '#e8eef7', fontSize: 12 },
+        valueFormatter: (value: unknown) =>
+          value == null || !Number.isFinite(Number(value))
+            ? '—'
+            : `${Number(value).toFixed(2)}%`,
+      },
+      legend: { top: 0, type: 'scroll', textStyle: { color: '#93a4b8', fontSize: 12 } },
+      grid: { left: 62, right: 20, top: 42, bottom: 64 },
+      dataZoom,
+      xAxis: timeAxis,
+      yAxis: {
+        type: 'value',
+        name: '5 日份额变化率 %',
+        nameTextStyle: { color: '#6b7c90', fontSize: 11 },
+        ...axisStyle,
+      },
+      series: rateSeries,
     }
   }
 

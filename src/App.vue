@@ -11,6 +11,7 @@ import {
 import SummaryCards from './components/SummaryCards.vue'
 import HuijinTrendChart from './components/HuijinTrendChart.vue'
 import ActiveCapChart from './components/ActiveCapChart.vue'
+import CrossValidationChart from './components/CrossValidationChart.vue'
 import MarketInsightPanel from './components/MarketInsightPanel.vue'
 import MainlinePanel from './components/MainlinePanel.vue'
 import ShareTrendChart from './components/ShareTrendChart.vue'
@@ -21,7 +22,7 @@ import ForceBriefingPanel from './components/ForceBriefingPanel.vue'
 import ForceVerdictPanel from './components/ForceVerdictPanel.vue'
 import RetailPanel from './components/RetailPanel.vue'
 import CiticPanel from './components/CiticPanel.vue'
-import { downloadEtfCsv, downloadMarketCsv } from './utils/dashboardExport'
+import { downloadEtfCsv, downloadMarketCsv, downloadBriefingMd } from './utils/dashboardExport'
 import { formatDateTime } from './utils/format'
 import { waitForRefresh } from './utils/refreshWait'
 
@@ -34,7 +35,7 @@ const elapsedSec = ref(0)
 const toast = ref({ show: false, tone: 'ok' as 'ok' | 'error', text: '' })
 const selectedCode = ref('')
 const metric = ref<'percent' | 'shares' | 'value'>('percent')
-const shareMode = ref<'all' | 'single'>('all')
+const shareMode = ref<'all' | 'single' | 'rate'>('all')
 let toastTimer: ReturnType<typeof setTimeout> | null = null
 
 const etfs = computed(() => data.value?.etfs ?? [])
@@ -275,7 +276,11 @@ onBeforeUnmount(() => {
           </div>
           <ActiveCapChart
                           :history="data?.marketActiveCapHistory ?? []"
-                          :events="marketEvents" />
+                          :events="marketEvents"
+                          :citic-history="data?.citicPositionHistory ?? []" />
+          <CrossValidationChart
+                          :etfs="etfs"
+                          :market-history="data?.marketActiveCapHistory ?? []" />
           <MarketInsightPanel
                               :history="data?.marketActiveCapHistory ?? []"
                               :events="marketEvents" />
@@ -310,6 +315,11 @@ onBeforeUnmount(() => {
                 全部对比
               </button>
               <button
+                      :class="{ on: shareMode === 'rate' }"
+                      @click="shareMode = 'rate'">
+                5 日变化率
+              </button>
+              <button
                       :class="{ on: shareMode === 'single' }"
                       @click="shareMode = 'single'">
                 当前 ETF
@@ -337,6 +347,12 @@ onBeforeUnmount(() => {
                       type="button"
                       @click="downloadMarketCsv(data)">
                 导出 0AMV CSV
+              </button>
+              <button
+                      class="btn ghost"
+                      type="button"
+                      @click="data && downloadBriefingMd(data)">
+                导出 Markdown 简报
               </button>
             </div>
           </div>

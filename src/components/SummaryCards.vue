@@ -4,6 +4,7 @@ import type { EtfSnapshot } from '../../shared/types'
 import { formatPct, formatShares, formatYi, yuanToYi } from '../utils/format'
 import { estimateRangeYi } from '../utils/estimateDisplay'
 import { aggregateShareSignals } from '../utils/signals'
+import { disclosureCountdown } from '../utils/disclosure'
 
 const props = defineProps<{
   etfs: EtfSnapshot[]
@@ -66,6 +67,9 @@ const cards = computed(() => {
     })
     .filter((p): p is NonNullable<typeof p> => p != null)
   const signal = aggregateShareSignals(signalPoints)
+  // 下一次强制披露窗口倒计时
+  const todayIso = new Date().toISOString().slice(0, 10)
+  const countdown = disclosureCountdown(todayIso, props.latestReport ?? null)
   const estimateSubParts = [
     estDateLabel
       ? `纳入 ${latestAnchored.length}/${props.etfs.length} 只 · 估算日 ${estDateLabel}`
@@ -122,6 +126,12 @@ const cards = computed(() => {
       value: `${props.etfs.length} 只`,
       sub: `已披露 ${disclosures.length} 只 · 披露占比平均 ${formatPct(avgPct)}`,
       accent: 'purple',
+    },
+    {
+      label: `下次${countdown.window.kind}披露`,
+      value: countdown.daysLeft > 0 ? `${countdown.daysLeft} 天` : '窗口内',
+      sub: `截止 ${countdown.window.deadline} · 报告期 ${countdown.window.reportDate}`,
+      accent: countdown.imminent ? 'red' : 'blue',
     },
   ]
 })

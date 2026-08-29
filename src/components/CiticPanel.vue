@@ -74,6 +74,13 @@ const sourceText = computed(() => {
         <div class="insight-value">{{ netChangeText(verdict.medianNetChange5d) }}</div>
         <div class="insight-detail muted">净持仓 5 日变化中位数</div>
       </div>
+      <div v-if="verdict.medianShortTop5Pct != null" class="force-verdict-gate">
+        <div class="insight-label">空头前五集中度</div>
+        <div class="insight-value">{{ verdict.medianShortTop5Pct.toFixed(1) }}%</div>
+        <div class="insight-detail muted">
+          四品种空头前五会员占全市场空头持仓中位数；越高越拥挤
+        </div>
+      </div>
     </div>
 
     <table class="citic-table" v-if="verdict.productCount > 0">
@@ -85,6 +92,7 @@ const sourceText = computed(() => {
           <th>净持仓</th>
           <th>净占比</th>
           <th>5 日变化</th>
+          <th>空头 Top5</th>
           <th>方向</th>
         </tr>
       </thead>
@@ -96,6 +104,7 @@ const sourceText = computed(() => {
           <td class="mono">{{ row.netHold >= 0 ? '+' : '' }}{{ row.netHold.toLocaleString() }}</td>
           <td class="mono">{{ row.netRatioPct >= 0 ? '+' : '' }}{{ row.netRatioPct.toFixed(1) }}%</td>
           <td class="mono">{{ row.netChange5dText }}</td>
+          <td class="mono">{{ row.shortTop5Pct != null ? `${row.shortTop5Pct.toFixed(1)}%` : '—' }}</td>
           <td :data-direction="row.direction">{{ row.direction }}</td>
         </tr>
       </tbody>

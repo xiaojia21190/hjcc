@@ -81,9 +81,32 @@ async function fetchProduct(token: string, product: Product): Promise<RawCiticRo
   return rowsFromResponse(json, product)
 }
 
-export function buildCiticPositionHistory(
-  rows: Array<{ date: string; product: Product; longHold: number; shortHold: number }>,
-): CiticPositionPoint[] {
+/** 中金所原始行（cffex 链路输出）；top5 字段为 null/缺失时表示数据源未提供。 */
+interface CffexRow {
+  date: string
+  product: Product
+  longHold: number
+  shortHold: number
+  longTop5Pct?: number | null
+  shortTop5Pct?: number | null
+}
+
+/** 合并后的行：top5 字段可能缺失（旧缓存无该字段）。 */
+type MergedRow = {
+  date: string
+  product: Product
+  longHold: number
+  shortHold: number
+  longTop5Pct?: number | null
+  shortTop5Pct?: number | null
+}
+
+function asTop5Pct(value: unknown): number | null {
+  const num = Number(value)
+  return Number.isFinite(num) && num >= 0 && num <= 100 ? num : null
+}
+
+export function buildCiticPositionHistory(rows: MergedRow[]): CiticPositionPoint[] {
   const sorted = [...rows].sort((a, b) =>
     a.date.localeCompare(b.date) || a.product.localeCompare(b.product),
   )
@@ -92,6 +115,8 @@ export function buildCiticPositionHistory(
   for (const row of sorted) {
     const prior = previous.get(row.product)
     const netHold = row.longHold - row.shortHold
+    const longTop5 = asTop5Pct(row.longTop5Pct)
+    const shortTop5 = asTop5Pct(row.shortTop5Pct)
     output.push({
       date: row.date,
       product: row.product,
@@ -101,6 +126,9 @@ export function buildCiticPositionHistory(
       longChange: prior ? row.longHold - prior.longHold : null,
       shortChange: prior ? row.shortHold - prior.shortHold : null,
       netChange: prior ? netHold - (prior.longHold - prior.shortHold) : null,
+      // 旧缓存无 top5 字段时不写键，前端按 null 处理
+      ...(longTop5 != null ? { longTop5Pct: longTop5 } : {}),
+      ...(shortTop5 != null ? { shortTop5Pct: shortTop5 } : {}),
     })
     previous.set(row.product, row)
   }
@@ -136,6 +164,8 @@ export function fetchCiticPositionHistoryCffex(
     product: point.product,
     longHold: point.longHold,
     shortHold: point.shortHold,
+    longTop5Pct: point.longTop5Pct,
+    shortTop5Pct: point.shortTop5Pct,
   }))
   const latestDate = existing.map((p) => p.date).sort().at(-1)
   const startDate = latestDate ? nextDateYyyyMmDd(latestDate) : fullStartDate
@@ -159,7 +189,7 @@ export function fetchCiticPositionHistoryCffex(
     const stderr = proc.stderr.trim()
     throw new Error(`cffex_citic.py 退出码 ${proc.status}${stderr ? `: ${stderr.slice(0, 200)}` : ''}`)
   }
-  let parsed: Array<{ date: string; product: Product; longHold: number; shortHold: number }>
+  let parsed: CffexRow[]
   try {
     parsed = JSON.parse(proc.stdout) as typeof parsed
   } catch {
@@ -177,6 +207,8 @@ export function fetchCiticPositionHistoryCffex(
       product: row.product as Product,
       longHold: row.longHold,
       shortHold: row.shortHold,
+      longTop5Pct: asTop5Pct(row.longTop5Pct),
+      shortTop5Pct: asTop5Pct(row.shortTop5Pct),
     }))
   // 去重合并：同一 (date, product) 以新抓到的为准（缓存可能是残缺快照）。
   const merged = mergeCiticRows(baseRows, fresh)
@@ -190,11 +222,11 @@ export function fetchCiticPositionHistoryCffex(
  * 其余保留旧值。纯函数, 便于单测增量逻辑。
  */
 export function mergeCiticRows(
-  base: Array<{ date: string; product: Product; longHold: number; shortHold: number }>,
-  fresh: Array<{ date: string; product: Product; longHold: number; shortHold: number }>,
-): Array<{ date: string; product: Product; longHold: number; shortHold: number }> {
+  base: MergedRow[],
+  fresh: MergedRow[],
+): MergedRow[] {
   const seen = new Set(fresh.map((row) => `${row.date}|${row.product}`))
-  const merged = [...fresh]
+  const merged: MergedRow[] = [...fresh]
   for (const row of base) {
     if (!seen.has(`${row.date}|${row.product}`)) merged.push(row)
   }
