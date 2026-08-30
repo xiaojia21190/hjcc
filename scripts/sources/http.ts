@@ -44,7 +44,8 @@ export function retryDelayMs(attempt: number, reset: boolean): number {
  * Bun 的 AbortController.abort() 在 ARM Linux 上不能强制关闭已建立但无数据
  * 流动的 TCP 连接（实测 push2delay 旧 CDN IP 101.42.164.241:7709 挂起 14h）。
  * 用 Promise.race + 超时 promise 做硬超时：超时后直接抛错，不再等 fetch 返回。
- * 残留的 socket 会被 GC 回收或 TCP keepalive 超时清理，不影响后续请求。
+ * 注意：不能在 finally 里 abort controller，否则成功响应也会被中断。
+ * 只在超时路径 abort，让残留 fetch 停止占用资源。
  */
 async function fetchWithTimeout(
   url: string,
@@ -52,18 +53,30 @@ async function fetchWithTimeout(
   timeoutMs: number = FETCH_TIMEOUT_MS,
 ): Promise<Response> {
   const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), timeoutMs)
-  const timeoutPromise = new Promise<never>((_, reject) => {
-    setTimeout(() => reject(new Error(`fetch timeout after ${timeoutMs}ms: ${url}`)), timeoutMs)
-  })
+  let done = false
+  const timer = setTimeout(() => {
+    if (!done) {
+      done = true
+      controller.abort()
+    }
+  }, timeoutMs)
   try {
-    return await Promise.race([
+    const result = await Promise.race([
       fetch(url, { headers, signal: controller.signal }),
-      timeoutPromise,
+      new Promise<never>((_, reject) => {
+        setTimeout(() => {
+          if (!done) {
+            done = true
+            controller.abort()
+            reject(new Error(`fetch timeout after ${timeoutMs}ms: ${url}`))
+          }
+        }, timeoutMs)
+      }),
     ])
+    done = true
+    return result
   } finally {
     clearTimeout(timer)
-    controller.abort() // 无论成功失败都释放连接资源
   }
 }
 
