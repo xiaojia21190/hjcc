@@ -180,6 +180,8 @@ export function mergeQuoteWithPrevious(
 const KLINE_HOSTS = [
   'https://push2his.eastmoney.com',
   'https://push2.eastmoney.com',
+  // push2delay 排最后：它本就是延迟行情，且其 CDN 节点（如 101.42.164.241）
+  // 在 ARM Linux 上会 TCP 连接成功但 HTTP 永远不响应，不应作为主力源。
   'https://push2delay.eastmoney.com',
 ]
 /** 记住上一次真正返回数据的域名，避免每个请求都从已封禁的域名重试一遍。 */
@@ -417,8 +419,8 @@ interface UlistResponse {
 }
 
 const TURNOVER_HOSTS = [
-  'https://push2delay.eastmoney.com',
   'https://push2.eastmoney.com',
+  'https://push2delay.eastmoney.com',
 ]
 
 /**

@@ -15,6 +15,7 @@ interface MarketQuoteResponse {
 
 const QUOTE_HOSTS = [
   'https://push2.eastmoney.com',
+  // push2delay 排最后：CDN 节点在 ARM Linux 上会挂起
   'https://push2delay.eastmoney.com',
 ]
 
