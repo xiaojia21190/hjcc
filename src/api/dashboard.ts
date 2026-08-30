@@ -58,3 +58,14 @@ export async function fetchRefreshStatus(): Promise<RefreshStatus | null> {
     return null
   }
 }
+
+export async function fetchRefreshLog(): Promise<{ lines: string[]; fetching: boolean } | null> {
+  if (!supportsServerRefresh) return null
+  try {
+    const res = await fetch('/api/refresh/log', { cache: 'no-store' })
+    if (!res.ok) return null
+    return (await res.json()) as { lines: string[]; fetching: boolean }
+  } catch {
+    return null
+  }
+}

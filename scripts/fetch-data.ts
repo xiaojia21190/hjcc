@@ -467,6 +467,25 @@ export async function resolveMarketActiveCapHistory(
   }
 }
 
+// 全局看门狗：12 分钟无进度则强制退出，防止数据源卡死导致进程永不结束。
+// 每次 console.log/warn/error 都会重置计时器，只要脚本在输出日志就不会误杀。
+const WATCHDOG_MS = 12 * 60 * 1000
+let lastActivity = Date.now()
+const origLog = console.log.bind(console)
+const origWarn = console.warn.bind(console)
+const origError = console.error.bind(console)
+const touch = () => { lastActivity = Date.now() }
+console.log = (...args: unknown[]) => { touch(); origLog(...args) }
+console.warn = (...args: unknown[]) => { touch(); origWarn(...args) }
+console.error = (...args: unknown[]) => { touch(); origError(...args) }
+const watchdog = setInterval(() => {
+  const idle = Date.now() - lastActivity
+  if (idle > WATCHDOG_MS) {
+    origError(`[watchdog] ${Math.round(idle / 1000)}s 无进度，强制退出（数据源可能卡死）`)
+    process.exit(1)
+  }
+}, 30_000)
+
 async function main() {
   const previous = await loadPreviousDashboard()
   if (previous) {
@@ -644,9 +663,14 @@ async function main() {
   )
   console.log('')
   console.log(formatCompletenessReport(dashboard))
+  clearInterval(watchdog)
+  console.log = origLog
+  console.warn = origWarn
+  console.error = origError
 }
 
 main().catch((e) => {
-  console.error(e)
+  clearInterval(watchdog)
+  origError(e)
   process.exit(1)
 })

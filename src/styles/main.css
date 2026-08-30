@@ -248,6 +248,30 @@ tr:focus-visible {
   font-size: 12px;
 }
 
+.refresh-log {
+  margin-top: 6px;
+  max-height: 120px;
+  overflow-y: auto;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--line);
+}
+
+.refresh-log-line {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.refresh-log-line.log-warn {
+  color: #f0b429;
+}
+
 .toast {
   position: fixed;
   left: 50%;

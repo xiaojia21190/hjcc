@@ -4,6 +4,7 @@ import type { DashboardData, EtfSnapshot, MarketReportEvent } from '../shared/ty
 import {
   DEFAULT_REFERENCE_DURATION_MS,
   fetchRefreshStatus,
+  fetchRefreshLog,
   loadDashboard,
   refreshDashboard,
   supportsServerRefresh,
@@ -32,6 +33,8 @@ const error = ref('')
 const refreshing = ref(false)
 const progress = ref(0)
 const elapsedSec = ref(0)
+const refreshLog = ref<string[]>([])
+let logPollTimer: ReturnType<typeof setInterval> | null = null
 const toast = ref({ show: false, tone: 'ok' as 'ok' | 'error', text: '' })
 const selectedCode = ref('')
 const metric = ref<'percent' | 'shares' | 'value'>('percent')
@@ -62,6 +65,21 @@ const marketEvents = computed<MarketReportEvent[]>(() => {
       label: `${labels.join(' / ')} 持有人报告期`,
     }))
 })
+
+function startLogPolling() {
+  stopLogPolling()
+  logPollTimer = setInterval(async () => {
+    const log = await fetchRefreshLog()
+    if (log) refreshLog.value = log.lines
+  }, 2000)
+}
+
+function stopLogPolling() {
+  if (logPollTimer) {
+    clearInterval(logPollTimer)
+    logPollTimer = null
+  }
+}
 
 function showToast(tone: 'ok' | 'error', text: string) {
   toast.value = { show: true, tone, text }
@@ -98,6 +116,8 @@ async function onRefresh() {
   refreshing.value = true
   elapsedSec.value = 0
   progress.value = 0
+  refreshLog.value = []
+  startLogPolling()
   try {
     const started = await refreshDashboard()
     if (!started.ok && started.message !== '正在抓取中') {
@@ -127,6 +147,7 @@ async function onRefresh() {
   } finally {
     refreshing.value = false
     progress.value = 0
+    stopLogPolling()
   }
 }
 
@@ -138,6 +159,7 @@ function onSelect(code: string) {
 onMounted(reload)
 onBeforeUnmount(() => {
   if (toastTimer) clearTimeout(toastTimer)
+  stopLogPolling()
 })
 </script>
 
@@ -186,6 +208,14 @@ onBeforeUnmount(() => {
       <p v-if="refreshing" class="muted refresh-progress-note">
         正在后台拉取公开数据，完成后自动刷新
       </p>
+      <div v-if="refreshing && refreshLog.length > 0" class="refresh-log" role="log" aria-live="polite">
+        <p
+          v-for="(line, i) in refreshLog.slice(-12)"
+          :key="i"
+          class="refresh-log-line mono"
+          :class="{ 'log-warn': /失败|降级|不可用|超时|timeout|error|warn/i.test(line) }"
+        >{{ line }}</p>
+      </div>
     </div>
 
     <main class="main">
