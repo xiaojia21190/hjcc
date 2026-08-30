@@ -10,6 +10,13 @@ const DEFAULT_RETRIES = 5
  * 而非 HTTP 状态码，继续重试既救不回来，又会延长封禁。留 2 次是为了容忍偶发抖动。
  */
 const RESET_RETRIES = 2
+/**
+ * 单次请求超时（毫秒）。
+ * 20s 对正常东财/新浪接口绰绰有余（实测 <3s），
+ * 但能在 ARM Linux 上东财 push2delay 挂起时快速触发超时，
+ * 避免整个 fetch 流程卡死 14 小时。
+ */
+const FETCH_TIMEOUT_MS = 20_000
 
 export async function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms))
@@ -32,6 +39,27 @@ export function retryDelayMs(attempt: number, reset: boolean): number {
   return (reset ? 1500 : 400) * 2 ** attempt
 }
 
+/**
+ * 带超时的 fetch。AbortSignal.timeout 在 Bun 的某些场景下不能正确中断
+ * 已建立但无数据流动的 TCP 连接（实测 ARM Linux 上 push2delay 挂起）。
+ * 这里额外用一个手动 AbortController + setTimeout 做双保险。
+ */
+async function fetchWithTimeout(
+  url: string,
+  headers: Record<string, string>,
+  timeoutMs: number = FETCH_TIMEOUT_MS,
+): Promise<Response> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  // 同时用 AbortSignal.timeout 作为第二层保护
+  const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(timeoutMs)])
+  try {
+    return await fetch(url, { headers, signal })
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 export async function fetchText(
   url: string,
   referer = 'https://finance.sina.com.cn/',
@@ -41,13 +69,10 @@ export async function fetchText(
   let limit = retries
   for (let i = 0; i < limit; i++) {
     try {
-      const res = await fetch(url, {
-        headers: {
-          'User-Agent': UA,
-          Referer: referer,
-          Accept: '*/*',
-        },
-        signal: AbortSignal.timeout(30_000),
+      const res = await fetchWithTimeout(url, {
+        'User-Agent': UA,
+        Referer: referer,
+        Accept: '*/*',
       })
       if (!res.ok) throw new Error(`HTTP ${res.status} ${url}`)
       const buf = await res.arrayBuffer()
