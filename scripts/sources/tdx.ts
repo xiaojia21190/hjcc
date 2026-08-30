@@ -54,17 +54,22 @@ export function __setExClientFactory(f: (() => TdxExHqClient) | null) {
 /** TDX 连接超时：ARM Linux 上通达信服务器可能接受 TCP 但不返回数据，
  * 导致 client.connect() 永不返回。10s 足够正常连接（实测 <2s）。 */
 const TDX_CONNECT_TIMEOUT_MS = 10_000
+/** TDX 单次 K 线查询超时：服务器接受连接但 getKline/getBars 不返回数据。 */
+const TDX_QUERY_TIMEOUT_MS = 15_000
+
+function withTimeout<T>(promise: Promise<T>, label: string, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label} 超时 ${ms}ms`)), ms)
+  })
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer!))
+}
 
 function connectWithTimeout<T extends { connect: (...args: unknown[]) => Promise<unknown> }>(
   client: T,
   label: string,
 ): Promise<T> {
-  return Promise.race([
-    client.connect().then(() => client),
-    new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error(`${label} 连接超时 ${TDX_CONNECT_TIMEOUT_MS}ms`)), TDX_CONNECT_TIMEOUT_MS),
-    ),
-  ])
+  return withTimeout(client.connect().then(() => client), label, TDX_CONNECT_TIMEOUT_MS)
 }
 
 async function getMainClient(): Promise<TdxClient> {
@@ -163,7 +168,11 @@ export async function fetchTdxIndexBars(
   const MAX_PAGES = 100
   for (let page = 0; page < MAX_PAGES; page++) {
     const start = page * KLINE_PAGE_SIZE
-    const resp = await client.getKline({ code, category: KLINE_DAY, start, count: KLINE_PAGE_SIZE })
+    const resp = await withTimeout(
+      client.getKline({ code, category: KLINE_DAY, start, count: KLINE_PAGE_SIZE }),
+      `tdx getKline ${code} p${page}`,
+      TDX_QUERY_TIMEOUT_MS,
+    )
     if (resp.bars.length === 0) break
     let reachedSince = false
     for (const b of resp.bars) {
@@ -194,7 +203,11 @@ export async function fetchTdxKlineBars(
   const MAX_PAGES = 100
   for (let page = 0; page < MAX_PAGES; page++) {
     const start = page * KLINE_PAGE_SIZE
-    const resp = await client.getKline({ code, category: KLINE_DAY, start, count: KLINE_PAGE_SIZE })
+    const resp = await withTimeout(
+      client.getKline({ code, category: KLINE_DAY, start, count: KLINE_PAGE_SIZE }),
+      `tdx getKline ${code} p${page}`,
+      TDX_QUERY_TIMEOUT_MS,
+    )
     if (resp.bars.length === 0) break
     let reachedSince = false
     for (const b of resp.bars) {
@@ -222,13 +235,17 @@ async function fetchCsiIndexBars(code: string, since = DEFAULT_SINCE): Promise<M
   const MAX_PAGES = 100
   for (let page = 0; page < MAX_PAGES; page++) {
     const start = page * KLINE_PAGE_SIZE
-    const bars = await client.getBars({
-      market: MARKET_CSI,
-      code,
-      category: EX_KLINE_DAY,
-      start,
-      count: KLINE_PAGE_SIZE,
-    })
+    const bars = await withTimeout(
+      client.getBars({
+        market: MARKET_CSI,
+        code,
+        category: EX_KLINE_DAY,
+        start,
+        count: KLINE_PAGE_SIZE,
+      }),
+      `tdx getBars ${code} p${page}`,
+      TDX_QUERY_TIMEOUT_MS,
+    )
     if (bars.length === 0) break
     let reachedSince = false
     for (const b of bars) {
