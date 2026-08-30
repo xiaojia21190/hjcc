@@ -51,18 +51,33 @@ export function __setExClientFactory(f: (() => TdxExHqClient) | null) {
   exClient = null
 }
 
+/** TDX 连接超时：ARM Linux 上通达信服务器可能接受 TCP 但不返回数据，
+ * 导致 client.connect() 永不返回。10s 足够正常连接（实测 <2s）。 */
+const TDX_CONNECT_TIMEOUT_MS = 10_000
+
+function connectWithTimeout<T extends { connect: (...args: unknown[]) => Promise<unknown> }>(
+  client: T,
+  label: string,
+): Promise<T> {
+  return Promise.race([
+    client.connect().then(() => client),
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`${label} 连接超时 ${TDX_CONNECT_TIMEOUT_MS}ms`)), TDX_CONNECT_TIMEOUT_MS),
+    ),
+  ])
+}
+
 async function getMainClient(): Promise<TdxClient> {
   if (mainClient && mainClient.isConnected) return mainClient
   const client = mainClientFactory
     ? mainClientFactory()
     : new TdxClient({ autoReconnect: false })
   client.on('error', (err) => {
-    // socket 异常若不监听会让进程崩溃；这里只记录，降级由调用方 try/catch 处理
     console.log('tdx 主行情 socket 异常:', err instanceof Error ? err.message : err)
   })
-  await client.connect()
-  mainClient = client
-  return client
+  const connected = await connectWithTimeout(client, 'tdx 主行情 7709')
+  mainClient = connected as TdxClient
+  return mainClient
 }
 
 async function getExClient(): Promise<TdxExHqClient> {
@@ -73,9 +88,9 @@ async function getExClient(): Promise<TdxExHqClient> {
   client.on('error', (err) => {
     console.log('tdx 扩展行情 socket 异常:', err instanceof Error ? err.message : err)
   })
-  await client.connect()
-  exClient = client
-  return client
+  const connected = await connectWithTimeout(client, 'tdx 扩展行情 7727')
+  exClient = connected as TdxExHqClient
+  return exClient
 }
 
 /** 关闭并释放连接（测试 / 进程退出前调用）。 */

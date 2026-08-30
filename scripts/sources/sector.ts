@@ -11,8 +11,9 @@ import { fetchJson, sleep } from './http'
  */
 const LEVEL2_CODE_PATTERN = /^BK(0[4-9]|10)/
 const SECTOR_LIST_HOSTS = [
-  'https://push2delay.eastmoney.com',
   'https://push2.eastmoney.com',
+  // push2delay 排最后：其 CDN 节点在 ARM Linux 上会 TCP 连接成功但 HTTP 永远不响应
+  'https://push2delay.eastmoney.com',
 ]
 const SECTOR_PAGE_SIZE = 100
 const SECTOR_REFERER = 'https://quote.eastmoney.com/'
