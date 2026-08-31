@@ -690,8 +690,14 @@ async function main() {
   console.error = origError
 }
 
-main().catch((e) => {
-  clearInterval(watchdog)
-  origError(e)
-  process.exit(1)
-})
+main()
+  .then(() => {
+    // 主流程完成后显式退出：tdx 等数据源的 socket 会吊住事件循环，
+    // 不退出的话 server 端 runFetch 永不 resolve，refresh 状态卡在 fetching
+    process.exit(0)
+  })
+  .catch((e) => {
+    clearInterval(watchdog)
+    origError(e)
+    process.exit(1)
+  })
