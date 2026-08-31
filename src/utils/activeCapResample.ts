@@ -2,7 +2,6 @@ import type { MarketActiveCapPoint } from '../../shared/types'
 
 export type Timeframe = 'daily' | 'weekly' | 'monthly'
 
-/** ISO 周标签：yyyy-Www，跨年自动区分 */
 /** ISO 周标签：yyyy-Www（1 月 4 日所在周恒为 W01），跨年自动区分 */
 function isoWeekKey(date: string): string {
   const d = new Date(`${date}T00:00:00Z`)

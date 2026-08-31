@@ -56,6 +56,7 @@ function eventMarkLine(events: MarketReportEvent[]) {
       fontSize: 10,
       formatter: '{b}',
       position: 'insideEndTop',
+      rotate: 0,
     },
     data: events.map((event) => ({ name: event.label, xAxis: event.date })),
   }
@@ -93,12 +94,34 @@ function citicEventDates(citicHistory: CiticPositionPoint[]): Map<string, string
   return events
 }
 
-function citicMarkLine(citicHistory: CiticPositionPoint[], dateSet: Set<string>) {
+/**
+ * 中信期货净持仓 |netChange| 超过 2σ 的交易日，作为事件标记。
+ * 标签强制横排（rotate: 0）；事件密集时按 x 轴顺序贪心间隔，
+ * 与上一个已显示标签相距不足 minGapBars 根 K 线的事件只保留竖线、隐藏文字，
+ * 避免横排标签水平堆字；全部竖线仍保留，明细见「中信期货席位多空」面板。
+ */
+function citicMarkLine(citicHistory: CiticPositionPoint[], dates: string[]) {
   const events = citicEventDates(citicHistory)
-  const items: { name: string; xAxis: string }[] = []
+  const dateSet = new Set(dates)
+  const dateIndex = new Map(dates.map((date, i) => [date, i]))
+  // 最多约 10 个标签摊满整个 x 轴；每个横排标签约 100px，250 根 K 线时≈25 根间隔
+  const minGapBars = Math.max(2, Math.ceil(dates.length / 10))
+  const items: (
+    | { name: string; xAxis: string }
+    | { name: string; xAxis: string; label: { show: boolean } }
+  )[] = []
+  let lastShown = -Infinity
   for (const [date, labels] of events) {
     if (!dateSet.has(date)) continue
-    items.push({ name: labels.join(' / '), xAxis: date })
+    const idx = dateIndex.get(date) ?? 0
+    const showLabel = idx - lastShown >= minGapBars
+    if (showLabel) lastShown = idx
+    const item: { name: string; xAxis: string; label?: { show: boolean } } = {
+      name: labels.join(' / '),
+      xAxis: date,
+    }
+    if (!showLabel) item.label = { show: false }
+    items.push(item)
   }
   if (items.length === 0) return undefined
   return {
@@ -111,6 +134,7 @@ function citicMarkLine(citicHistory: CiticPositionPoint[], dateSet: Set<string>)
       fontSize: 10,
       formatter: '{b}',
       position: 'insideEndBottom',
+      rotate: 0,
     },
     data: items,
   }
@@ -251,14 +275,16 @@ export function buildActiveCapChartOption(
   citicHistory: CiticPositionPoint[] = [],
 ): EChartsCoreOption {
   const dates = history.map((point) => point.date)
-  const visibleCount = timeframe === 'daily' ? 250 : dates.length
-  const visibleStart = Math.max(0, dates.length - visibleCount)
-  const visibleEnd = Math.max(visibleStart, dates.length - 1)
   const dateSet = new Set(dates.map((date) => date.split('（')[0]))
   const visibleEvents = events.filter((event) => dateSet.has(event.date))
   const citicMarkLineOption =
-    citicHistory.length > 0 ? citicMarkLine(citicHistory, dateSet) : undefined
-  const zoom = { startValue: visibleStart, endValue: visibleEnd }
+    citicHistory.length > 0 ? citicMarkLine(citicHistory, dates) : undefined
+  // 日线只展示最近 10 个交易日（图表不再尾随全历史，与中信事件标记的默认密度对齐）；
+  // 周/月线周期数少，直接看全量。echarts dataZoom 的 start/end 为百分比，相对轴范围 [0, n-1]。
+  const zoom =
+    timeframe === 'daily'
+      ? { start: (Math.max(0, dates.length - 10) / Math.max(1, dates.length - 1)) * 100, end: 100 }
+      : { start: 0, end: 100 }
   const series: Record<string, unknown>[] = [...priceSeries(history, visibleEvents)]
   if (citicMarkLineOption) {
     // 在隐形事件序列上注入 markLine

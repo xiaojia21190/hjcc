@@ -20,6 +20,11 @@ const props = withDefaults(
 
 const timeframe = ref<Timeframe>('daily')
 const TIMEFRAME_LABEL: Record<Timeframe, string> = { daily: '日', weekly: '周', monthly: '月' }
+const timeframes = [
+  { key: 'daily' as Timeframe, label: '日线' },
+  { key: 'weekly' as Timeframe, label: '周线' },
+  { key: 'monthly' as Timeframe, label: '月线' },
+]
 
 /** 交易日近似换算：周 ≈ 5 个交易日，月 ≈ 21 个交易日 */
 const LOOKBACK_DAYS: Record<Timeframe, { bars: number; unit: string }> = {
@@ -150,13 +155,16 @@ const option = computed(() =>
 <template>
   <div v-if="history.length === 0" class="state muted">暂无 0AMV 市场数据</div>
   <template v-else>
-    <div class="seg">
+    <div class="seg" role="tablist" aria-label="周期切换">
       <button
-        v-for="(value, label) in { daily: '日线', weekly: '周线', monthly: '月线' }"
-        :key="value"
-        :class="{ on: timeframe === value }"
-        @click="timeframe = value as Timeframe">
-        {{ label }}
+        v-for="item in timeframes"
+        :key="item.key"
+        type="button"
+        role="tab"
+        :aria-selected="timeframe === item.key"
+        :class="{ on: timeframe === item.key }"
+        @click="timeframe = item.key">
+        {{ item.label }}
       </button>
     </div>
     <div class="market-stats" role="list" aria-label="0AMV 市场状态">
