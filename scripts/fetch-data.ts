@@ -491,6 +491,27 @@ async function main() {
   if (previous) {
     console.log(`发现上次快照 ${previous.updatedAt}，接口无有效报告时将保留该数据`)
   }
+
+  // 中信席位：python 子进程最先启动（并行），主流程继续抓其他数据源；
+  // 组装快照前有界等待（CITIC_WAIT_MINUTES，默认 8 分钟），超时/失败沿用缓存。
+  // python 侧每 60s 输出心跳日志，喂看门狗，避免静默长回填被 12min 看门狗误杀。
+  let citicPositionHistory: CiticPositionPoint[] = previous?.citicPositionHistory ?? []
+  let citicPositionQuality: CiticPositionQuality =
+    previous?.citicPositionQuality ?? unavailableCiticQuality('未接入中信持仓数据源')
+  const tushareToken = process.env.TUSHARE_TOKEN?.trim()
+  const citicWaitMinutes = Math.min(Math.max(Number(process.env.CITIC_WAIT_MINUTES ?? 8), 1), 11)
+  let citicError: unknown = null
+  const citicPromise: Promise<CiticPositionPoint[]> = (
+    tushareToken
+      ? fetchCiticPositionHistory(tushareToken)
+      : fetchCiticPositionHistoryCffex(previous?.citicPositionHistory ?? [], {
+          timeoutMs: citicWaitMinutes * 60_000,
+        })
+  ).catch((error) => {
+    citicError = error
+    return []
+  })
+
   console.log('抓取 ETF 全市场行情…')
   const [universeFetched, marketActiveCapResolution] = await Promise.all([
     fetchEtfUniverse(),
@@ -517,23 +538,23 @@ async function main() {
     console.warn('两融抓取失败，沿用上次快照', error)
   }
 
-  let citicPositionHistory: CiticPositionPoint[] = previous?.citicPositionHistory ?? []
-  let citicPositionQuality: CiticPositionQuality =
-    previous?.citicPositionQuality ?? unavailableCiticQuality('未接入中信持仓数据源')
-  const tushareToken = process.env.TUSHARE_TOKEN?.trim()
-  const useTushare = tushareToken != null
-  console.log(useTushare ? '抓取中信期货股指期货会员多空持仓（Tushare）…' : '抓取中信期货股指期货会员多空持仓（中金所官网/Python）…')
+  // 中信席位：等待并行中的 python/Tushare 抓取（有界，超时由子进程定时器保证）
+  console.log(
+    tushareToken
+      ? '等待中信期货持仓（Tushare）…'
+      : `等待中信期货持仓（中金所官网/Python，并行中，预算 ${citicWaitMinutes} 分钟）…`,
+  )
   try {
-    const fetched = useTushare
-      ? await fetchCiticPositionHistory(tushareToken!)
-      : await fetchCiticPositionHistoryCffex(citicPositionHistory)
-    citicPositionHistory = fetched
+    const fetched = await citicPromise
+    if (fetched.length > 0 || citicPositionHistory.length === 0) {
+      citicPositionHistory = fetched
+    }
     citicPositionQuality = {
-      source: useTushare ? 'tushare' : 'cffex',
-      asOf: fetched.at(-1)?.date ?? null,
+      source: tushareToken ? 'tushare' : 'cffex',
+      asOf: citicPositionHistory.at(-1)?.date ?? null,
       warning: null,
     }
-    console.log(`中信会员持仓 ${fetched.length} 条，截止 ${citicPositionQuality.asOf}`)
+    console.log(`中信会员持仓 ${citicPositionHistory.length} 条，截止 ${citicPositionQuality.asOf}`)
   } catch (error) {
     const warning = error instanceof Error ? error.message : String(error)
     citicPositionQuality = {

@@ -163,38 +163,63 @@ import { spawn } from 'node:child_process'
 
 const CITIC_PY_TIMEOUT_MS = 20 * 60 * 1000
 
-function runCiticPython(command: string): Promise<{ status: number | null; stdout: string; stderr: string; error?: Error }> {
+function runCiticPython(
+  command: string,
+  opts: { timeoutMs?: number } = {},
+): Promise<{ status: number | null; stdout: string; stderr: string; error?: Error }> {
+  const timeoutMs = opts.timeoutMs ?? CITIC_PY_TIMEOUT_MS
   return new Promise((resolve) => {
     const proc: ReturnType<typeof spawn> = spawn(command, { shell: true })
     let stdout = ''
     let stderr = ''
     let settled = false
-    const timer = setTimeout(() => {
+    const startedAt = Date.now()
+    // 心跳：python 回填可能长达几十分钟且不产生 stdout；
+    // 定期把进度打到 console，既喂 fetch-data 的 12min 看门狗，也让日志可见
+    const beat = setInterval(() => {
+      const elapsed = Math.round((Date.now() - startedAt) / 1000)
+      const tail = stderr.trim().split('\n').at(-1)?.slice(0, 60) ?? ''
+      console.warn(`[citic-python] 运行中 ${elapsed}s${tail ? ` · ${tail}` : ''}`)
+    }, 60_000)
+    const settle = (result: { status: number | null; stdout: string; stderr: string; error?: Error }) => {
       if (settled) return
       settled = true
+      clearInterval(beat)
+      resolve(result)
+    }
+    const timer = setTimeout(() => {
       proc.kill('SIGKILL')
-      resolve({ status: null, stdout, stderr, error: new Error(`cffex_citic.py 超时 ${CITIC_PY_TIMEOUT_MS / 60000} 分钟`) })
-    }, CITIC_PY_TIMEOUT_MS)
+      settle({ status: null, stdout, stderr, error: new Error(`cffex_citic.py 超时 ${Math.round(timeoutMs / 60000)} 分钟`) })
+    }, timeoutMs)
     proc.stdout!.on('data', (chunk: Buffer) => { stdout += chunk.toString('utf8') })
     proc.stderr!.on('data', (chunk: Buffer) => { stderr += chunk.toString('utf8') })
     proc.on('error', (error: Error) => {
-      if (settled) return
-      settled = true
       clearTimeout(timer)
-      resolve({ status: null, stdout, stderr, error })
+      settle({ status: null, stdout, stderr, error })
     })
     proc.on('close', (status: number | null) => {
-      if (settled) return
-      settled = true
       clearTimeout(timer)
-      resolve({ status, stdout, stderr })
+      settle({ status, stdout, stderr })
     })
   })
 }
 
+/**
+ * 无缓存时的回填起点：默认只回源近 CITIC_BACKFILL_DAYS 天（45 天）。
+ * 之前默认从 20240101 全量回填，板卡上要 1 小时以上，必然撞看门狗/超时；
+ * 深度可 CITIC_BACKFILL_START=20240101 手动指定，或之后每日增量自然累积。
+ */
+export function defaultBackfillStart(): string {
+  const envStart = process.env.CITIC_BACKFILL_START?.trim()
+  if (envStart) return envStart
+  const days = Number(process.env.CITIC_BACKFILL_DAYS ?? 45)
+  const d = new Date(Date.now() - Math.max(1, days) * 86400000)
+  return d.toISOString().slice(0, 10).replaceAll('-', '')
+}
+
 export async function fetchCiticPositionHistoryCffex(
   existing: CiticPositionPoint[] = [],
-  fullStartDate = '20240101',
+  opts: { fullStartDate?: string; timeoutMs?: number } = {},
 ): Promise<CiticPositionPoint[]> {
   const baseRows = existing.map((point) => ({
     date: point.date,
@@ -205,13 +230,15 @@ export async function fetchCiticPositionHistoryCffex(
     shortTop5Pct: point.shortTop5Pct,
   }))
   const latestDate = existing.map((p) => p.date).sort().at(-1)
-  const startDate = latestDate ? nextDateYyyyMmDd(latestDate) : fullStartDate
+  const startDate = latestDate
+    ? nextDateYyyyMmDd(latestDate)
+    : opts.fullStartDate ?? defaultBackfillStart()
   const python = process.env.CITIC_PYTHON?.trim() || 'python'
   // Bun 在 Windows 上用默认 spawn 不一定能解析 "python"(WindowsApps shim),
   // 但 shell 能。这里拼成命令字符串交给 shell 解析, 跨平台通用。
   const scriptPath = path.join(import.meta.dir, 'cffex_citic.py')
   const command = `${python} ${scriptPath} --start ${startDate}`
-  const proc = await runCiticPython(command)
+  const proc = await runCiticPython(command, { timeoutMs: opts.timeoutMs })
   if (proc.error) {
     const err = proc.error as Error & { code?: unknown }
     if (err.code === 'ENOENT') throw new Error('未找到 python, 无法调用中金所抓取脚本')
