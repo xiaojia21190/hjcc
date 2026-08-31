@@ -35,6 +35,7 @@ const LOOKBACK_DAYS: Record<Timeframe, { bars: number; unit: string }> = {
 
 const visible = computed(() => resampleActiveCap(props.history, timeframe.value))
 const events = computed(() => props.events.filter((event) => visible.value.some((point) => point.date === event.date)))
+const hasCitic = computed(() => props.citicHistory.length > 0)
 const barCount = computed(() => Math.max(1, visible.value.length - 1))
 
 function changePct(current: number, previous?: number): number | null {
@@ -175,11 +176,14 @@ const option = computed(() =>
       </div>
     </div>
     <p v-if="events.length" class="chart-note">
-      金色虚线仅标记汇金持有人报告期；报告期不等同于公告发布日期。红色点线标记中信期货大额增减持（|Δ| ≥ 2σ）。
+      金色虚线仅标记汇金持有人报告期；报告期不等同于公告发布日期。
+    </p>
+    <p v-if="hasCitic" class="chart-note">
+      中信席位净持仓日变化（四品种求和）；「!」标记 |Δ| ≥ 2σ 的大额日，明细见「中信期货席位多空」面板。
     </p>
     <p class="chart-note muted">
       KDJ 用 0AMV 自身滚动高低点近似 RSV，不是个股 OHLC 口径；虚线为 20 / 50 / 80。周/月线由日线聚合：活筹取周期末值，成交额取周期合计，指标按周期重算。
     </p>
-    <BaseChart :option="option" height="520px" />
+    <BaseChart :option="option" height="600px" />
   </template>
 </template>

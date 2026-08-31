@@ -10,6 +10,7 @@ const GROUPS = [
   { title: '主图', names: ['0AMV 活筹估算', '5 日参考线', '沪深两市成交额'] },
   { title: 'MACD', names: ['DIF', 'DEA', 'MACD 柱'] },
   { title: 'KDJ', names: ['K', 'D', 'J'] },
+  { title: '中信席位', names: ['中信净持仓Δ（手）'] },
 ] as const
 
 export const MAIN_LEGEND = GROUPS[0].names
