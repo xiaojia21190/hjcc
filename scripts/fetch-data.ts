@@ -526,7 +526,7 @@ async function main() {
   try {
     const fetched = useTushare
       ? await fetchCiticPositionHistory(tushareToken!)
-      : fetchCiticPositionHistoryCffex(citicPositionHistory)
+      : await fetchCiticPositionHistoryCffex(citicPositionHistory)
     citicPositionHistory = fetched
     citicPositionQuality = {
       source: useTushare ? 'tushare' : 'cffex',

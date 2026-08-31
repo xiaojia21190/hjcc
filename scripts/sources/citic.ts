@@ -1,4 +1,3 @@
-import { spawnSync } from 'node:child_process'
 import path from 'node:path'
 import type {
   CiticPositionPoint,
@@ -154,11 +153,49 @@ export async function fetchCiticPositionHistory(
  * 增量策略：existing 有缓存时只从「缓存最后日期的下一天」开始抓, 抓到的新日
  * 追加到 existing 后整体重算增减；无缓存时从 2024-01-01 全量回填。
  * 多往前抓 1 个自然日作冗余, 容忍交易所 T 日结算数据晚发布/当日未抓到。
+ *
+ * 为什么必须异步：spawnSync 会阻塞整个 event loop，fetch-data 主流程
+ * （0AMV/两融/板块/份额等所有 await）全部停摆，板卡上无缓存全量回填
+ * 644 天 × akshare 逐日请求可达 20+ 分钟，父进程 15min 硬超时直接杀进程。
+ * 改用 spawn + Promise，其他数据源可并行推进；py 子进程自身另有 20min 上限。
  */
-export function fetchCiticPositionHistoryCffex(
+import { spawn } from 'node:child_process'
+
+const CITIC_PY_TIMEOUT_MS = 20 * 60 * 1000
+
+function runCiticPython(command: string): Promise<{ status: number | null; stdout: string; stderr: string; error?: Error }> {
+  return new Promise((resolve) => {
+    const proc: ReturnType<typeof spawn> = spawn(command, { shell: true })
+    let stdout = ''
+    let stderr = ''
+    let settled = false
+    const timer = setTimeout(() => {
+      if (settled) return
+      settled = true
+      proc.kill('SIGKILL')
+      resolve({ status: null, stdout, stderr, error: new Error(`cffex_citic.py 超时 ${CITIC_PY_TIMEOUT_MS / 60000} 分钟`) })
+    }, CITIC_PY_TIMEOUT_MS)
+    proc.stdout!.on('data', (chunk: Buffer) => { stdout += chunk.toString('utf8') })
+    proc.stderr!.on('data', (chunk: Buffer) => { stderr += chunk.toString('utf8') })
+    proc.on('error', (error: Error) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      resolve({ status: null, stdout, stderr, error })
+    })
+    proc.on('close', (status: number | null) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      resolve({ status, stdout, stderr })
+    })
+  })
+}
+
+export async function fetchCiticPositionHistoryCffex(
   existing: CiticPositionPoint[] = [],
   fullStartDate = '20240101',
-): CiticPositionPoint[] {
+): Promise<CiticPositionPoint[]> {
   const baseRows = existing.map((point) => ({
     date: point.date,
     product: point.product,
@@ -174,12 +211,7 @@ export function fetchCiticPositionHistoryCffex(
   // 但 shell 能。这里拼成命令字符串交给 shell 解析, 跨平台通用。
   const scriptPath = path.join(import.meta.dir, 'cffex_citic.py')
   const command = `${python} ${scriptPath} --start ${startDate}`
-  const proc = spawnSync(command, {
-    encoding: 'utf8',
-    shell: true,
-    timeout: 20 * 60 * 1000,
-    maxBuffer: 64 * 1024 * 1024,
-  })
+  const proc = await runCiticPython(command)
   if (proc.error) {
     const err = proc.error as Error & { code?: unknown }
     if (err.code === 'ENOENT') throw new Error('未找到 python, 无法调用中金所抓取脚本')
